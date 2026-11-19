@@ -1,0 +1,167 @@
+# Every commit: format, lints, unit tests, the memory budget, docs; a short
+# fuzz run of every parser; static musl builds for the gateways with their
+# tests run under qemu; and end to end against a real Matter device.
+#
+#   aarch64-unknown-linux-musl   Raspberry Pi 3, 4 and 5 class boards
+#   mipsel-unknown-linux-musl    MT7621/MT7628 class routers (128 MB RAM)
+#
+# mipsel is a tier 3 target: no prebuilt std, so it builds std itself on a
+# pinned nightly (-Zbuild-std) and links against zig's musl.
+#
+# The device is connectedhomeip's chip-all-clusters-app from the CSA's
+# chip-cert-bins image (the apps certification testing uses), on a
+# GitHub-hosted arm64 runner because the image is arm64 only.
+
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NIGHTLY: nightly-2026-11-14
+  ZIG: 0.16.0
+  ZIGBUILD: 0.24.1
+  # Static binary budget for the gateways, bytes.
+  MAX_BINARY_SIZE: 4194304
+  # connectedhomeip's certification test apps, by SDK commit.
+  CHIP_CERT_BINS: connectedhomeip/chip-cert-bins:6ff03a282176cb02156bfafb9988498da3c35ffb
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        timeout-minutes: 10
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        timeout-minutes: 10
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Memory budget, 100 nodes
+        run: cargo test --release -p matter-controller --test budget -- --ignored --nocapture
+      - name: Docs build without warnings
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
+  e2e:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        timeout-minutes: 10
+      - uses: Swatinem/rust-cache@v2
+        timeout-minutes: 10
+      - name: Pull the device image
+        timeout-minutes: 15
+        run: docker pull -q "${CHIP_CERT_BINS}"
+      - name: Build the test
+        run: cargo test -p matter-bridge --test e2e --no-run
+      - name: Start chip-all-clusters-app
+        run: |
+          docker run -d --name dut --network host "${CHIP_CERT_BINS}" \
+            /root/chip-all-clusters-app --KVS /tmp/dut.kvs
+          sleep 3
+          docker ps
+          ip -6 addr show scope link
+      - name: Commission over IP, read, subscribe, write, invoke, bridge to MQTT, second admin
+        env:
+          RUST_LOG: info
+        run: cargo test -p matter-bridge --test e2e -- --ignored --nocapture
+      - name: Device log
+        if: always()
+        run: docker logs dut 2>&1 | tail -300
+
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        timeout-minutes: 10
+        with:
+          toolchain: ${{ env.NIGHTLY }}
+          targets: x86_64-unknown-linux-gnu
+      - uses: taiki-e/install-action@v2
+        timeout-minutes: 10
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        timeout-minutes: 10
+        with:
+          workspaces: fuzz
+      # The sanitizers need glibc; name the target so a runner whose default
+      # is musl does not pick it.
+      - name: Fuzz every parser for a short while
+        run: |
+          set -euo pipefail
+          for target in $(cargo +"${NIGHTLY}" fuzz list); do
+            echo "::group::${target}"
+            cargo +"${NIGHTLY}" fuzz run --target x86_64-unknown-linux-gnu "${target}" -- -max_total_time=60 -rss_limit_mb=1024 -max_len=4096
+            echo "::endgroup::"
+          done
+
+  cross:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        timeout-minutes: 10
+        with:
+          toolchain: ${{ env.NIGHTLY }}
+          components: rust-src
+          targets: aarch64-unknown-linux-musl
+      - uses: mlugg/setup-zig@v2
+        timeout-minutes: 10
+        with:
+          version: ${{ env.ZIG }}
+      - uses: taiki-e/install-action@v2
+        timeout-minutes: 10
+        with:
+          tool: cargo-zigbuild@${{ env.ZIGBUILD }}
+      - name: qemu-user
+        timeout-minutes: 10
+        run: sudo apt-get update -q && sudo apt-get install -y -q qemu-user
+      - uses: Swatinem/rust-cache@v2
+        timeout-minutes: 10
+      - name: Test under qemu and build static binaries
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER: qemu-aarch64
+          CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_RUNNER: qemu-mipsel
+          CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_RUSTFLAGS: -C target-feature=+crt-static -C link-self-contained=no
+        run: |
+          set -euo pipefail
+          for target in aarch64-unknown-linux-musl mipsel-unknown-linux-musl; do
+            echo "::group::${target}"
+            std=()
+            case "${target}" in mips*) std=(-Zbuild-std) ;; esac
+            cargo-zigbuild test --workspace --target "${target}" "${std[@]}"
+            case "${target}" in mips*) std=(-Zbuild-std=std,panic_abort) ;; esac
+            cargo zigbuild --release --bin matter-bridge --target "${target}" "${std[@]}"
+            bin="target/${target}/release/matter-bridge"
+            file "${bin}" | grep -q 'statically linked' || { file "${bin}"; echo "${target}: not static" >&2; exit 1; }
+            size="$(stat -c %s "${bin}")"
+            xz_size="$(xz -9 -c "${bin}" | wc -c)"
+            echo "${target} matter-bridge: ${size} bytes, ${xz_size} bytes xz" | tee -a "${GITHUB_STEP_SUMMARY}"
+            [ "${size}" -le "${MAX_BINARY_SIZE}" ] || { echo "matter-bridge is over the ${MAX_BINARY_SIZE} byte budget" >&2; exit 1; }
+            runner="CARGO_TARGET_$(echo "${target}" | tr 'a-z-' 'A-Z_')_RUNNER"
+            "${!runner}" "${bin}" --version
+            "${!runner}" "${bin}" parse 3497-011-2332
+            echo "::endgroup::"
+          done

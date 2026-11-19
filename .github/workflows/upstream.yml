@@ -1,0 +1,28 @@
+# Weekly: the whole test suite against rs-matter's main branch as it is now,
+# so a change upstream that breaks us shows before the pin moves.
+
+name: upstream
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rs-matter-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        timeout-minutes: 10
+      - name: Point the pin at rs-matter's main
+        run: |
+          set -euo pipefail
+          head="$(git ls-remote https://github.com/project-chip/rs-matter refs/heads/main | cut -f1)"
+          echo "rs-matter main is ${head}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          sed -i -E "s/rev = \"[0-9a-f]{40}\"/rev = \"${head}\"/" Cargo.toml
+          cargo update -p rs-matter -p rs-matter-tlv -p rs-matter-utils -p rs-matter-codegen
+      - run: cargo test --workspace

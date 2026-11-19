@@ -1,0 +1,35 @@
+[package]
+name = "matter-bridge"
+description = "A standalone Matter to MQTT bridge with Home Assistant discovery, on a Rust Matter controller built on rs-matter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["matter", "mqtt", "home-assistant", "controller"]
+categories = ["command-line-utilities", "network-programming"]
+
+[[bin]]
+name = "matter-bridge"
+path = "src/main.rs"
+
+[dependencies]
+matter-controller.workspace = true
+matter-model.workspace = true
+lexopt = "0.3"
+rumqttc = { version = "0.25", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi", "tracing-log"] }
+
+[dev-dependencies]
+matter-controller.workspace = true
+rumqttd = { version = "0.20", default-features = false }
+tempfile = "3"
+
+[lints]
+workspace = true

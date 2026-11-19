@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/matter-model",
+    "crates/matter-controller",
+    "crates/matter-bridge",
+]
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+repository = "https://github.com/pulzar-net/matter-bridge"
+authors = ["Pulzar LLC"]
+
+[workspace.dependencies]
+matter-model = { path = "crates/matter-model", version = "0.1.0" }
+matter-controller = { path = "crates/matter-controller", version = "0.1.0" }
+
+# rs-matter is used from a pinned commit of its main branch: the controller
+# side (commissioner, IM client, mDNS browse) is newer than its last release.
+# Dependabot moves the pin; CI runs the whole suite on every move.
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["os", "rustcrypto", "log", "max-sessions-64"] }
+rs-matter-tlv = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
+rs-matter-utils = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
+rs-matter-codegen = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356" }
+
+async-io = "2"
+embassy-time = { version = "0.5", features = ["std"] }
+embassy-time-queue-utils = { version = "0.3", features = ["generic-queue-64"] }
+hex = { version = "0.4", features = ["serde"] }
+if-addrs = "0.15"
+log = "0.4"
+rand = { version = "0.10", default-features = false, features = ["std", "std_rng", "sys_rng", "thread_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socket2 = { version = "0.6", features = ["all"] }
+thiserror = "2"
+tokio = { version = "1", default-features = false }
+toml = "0.8"
+tracing = "0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[profile.dev]
+debug = "line-tables-only"
+
+# rs-matter-dm-clusters generates ~30 MB of cluster code in its build script,
+# which is several times slower unoptimized.
+[profile.dev.build-override]
+opt-level = 2
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

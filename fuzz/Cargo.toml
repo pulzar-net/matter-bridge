@@ -1,0 +1,46 @@
+[package]
+name = "matter-bridge-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+matter-model = { path = "../crates/matter-model" }
+matter-controller = { path = "../crates/matter-controller" }
+rs-matter-tlv = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
+serde_json = "1"
+
+[[bin]]
+name = "tlv_to_json"
+path = "fuzz_targets/tlv_to_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_to_tlv"
+path = "fuzz_targets/json_to_tlv.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "report_data"
+path = "fuzz_targets/report_data.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "onboarding"
+path = "fuzz_targets/onboarding.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

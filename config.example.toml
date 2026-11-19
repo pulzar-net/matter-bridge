@@ -1,0 +1,39 @@
+# matter-bridge configuration. Every section is optional.
+
+[mqtt]
+host = "localhost"
+port = 1883
+# username = "matter"
+# password_file = "/etc/matter-bridge/mqtt-password"
+client_id = "matter-bridge"
+base_topic = "matter"
+keepalive = 30
+
+[homeassistant]
+enabled = true
+discovery_prefix = "homeassistant"
+status_topic = "homeassistant/status"
+
+[matter]
+# UDP port for Matter traffic (5540 is a device's; a controller uses another).
+port = 5541
+# Network interface for mDNS; the first with an IPv6 address if unset.
+# interface = "eth0"
+# Fabric id of a new fabric; random if unset. Ignored once the fabric exists.
+# fabric_id = 1
+# Vendor id the controller administers nodes as. 0xFFF1 is the CSA's test
+# vendor id, for controllers that are not certified.
+vendor_id = 0xFFF1
+# Commission devices without verifying their attestation (DAC chain and
+# certification declaration). Verification is not implemented yet, so this
+# must stay on to commission anything.
+allow_unverified_attestation = true
+# Longest a subscription may stay silent before it is renewed, seconds.
+max_report_interval = 60
+# How long to look for a device to commission, seconds.
+discovery_timeout = 30
+
+[data]
+# The fabric (CA keys), the controller's identity and the node store. Keep it
+# private: it holds the fabric's keys.
+dir = "/var/lib/matter-bridge"

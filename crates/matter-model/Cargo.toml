@@ -1,0 +1,24 @@
+[package]
+name = "matter-model"
+description = "The Matter data model as lookup tables generated from the CSA's published IDL, and JSON <-> Matter TLV conversion guided by it"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords = ["matter", "tlv", "json", "smart-home"]
+categories = ["encoding", "network-programming"]
+
+[dependencies]
+rs-matter-tlv.workspace = true
+rs-matter-utils.workspace = true
+hex.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+rs-matter-codegen.workspace = true
+
+[lints]
+workspace = true
