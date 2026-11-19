@@ -111,12 +111,15 @@ session.
 ## Commissioning over Bluetooth and Thread
 
 - **BLE.** rs-matter has BTP in the central role (`Btp::set_initiator(true)`)
-  and parses Matter advertisements (`AdvData`). What is missing is a GATT
-  central, which is bluetooth-bridge's: scan for service data `0xFFF6`,
-  connect, MTU, write C1, subscribe to C2 indications, read C3. The interface
-  was proposed to the bluetooth-bridge project; matter-controller takes it as a
-  dependency once it exists and adds a `Transport::Ble` path to commissioning
-  (PASE over BTP, then network commissioning, then CASE over IP).
+  and parses Matter advertisements (`AdvData`). The GATT central comes from
+  bluetooth-bridge's `bluetooth-host` crate: scan and filter adverts by service
+  data `0xFFF6`, `connect` (no pairing), `exchange_mtu(247)`, discover the
+  `0xFFF6` service, `write` to C1 (completes on the Write Response), subscribe
+  to C2 and take its indications from the connection's events (listening
+  before subscribing, so the BTP handshake response is not missed), `read` C3.
+  matter-controller feeds those indications to `Btp::process_incoming` and
+  writes what `Btp::process_outgoing` yields; commissioning then runs PASE
+  over BTP, network commissioning, and CASE over IP.
 - **Thread.** A Thread device is commissioned over BLE and given the Thread
   network's active operational dataset with `AddOrUpdateThreadNetwork` and
   `ConnectNetwork`, over PASE, inside the fail-safe. The dataset comes from
