@@ -15,22 +15,8 @@ rs-matter-tlv = { git = "https://github.com/project-chip/rs-matter", rev = "977e
 serde_json = "1"
 
 [[bin]]
-name = "tlv_to_json"
-path = "fuzz_targets/tlv_to_json.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
 name = "json_to_tlv"
 path = "fuzz_targets/json_to_tlv.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "report_data"
-path = "fuzz_targets/report_data.rs"
 test = false
 doc = false
 bench = false

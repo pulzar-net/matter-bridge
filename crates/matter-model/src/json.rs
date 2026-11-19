@@ -510,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_tlv_is_an_error_not_a_panic() {
+    fn malformed_tlv_is_an_error() {
         for bytes in [
             &[0x15u8][..],
             &[0x0c, 0x05, b'a'],

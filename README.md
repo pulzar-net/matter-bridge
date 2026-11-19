@@ -131,12 +131,12 @@ topics above.
 
 ```sh
 cargo test --workspace
-cargo +nightly fuzz run tlv_to_json   # see fuzz/ for every target
+cargo +nightly fuzz run json_to_tlv   # see fuzz/ for every target
 ```
 
 CI commissions and controls connectedhomeip's `chip-all-clusters-app` (from
 the CSA's `chip-cert-bins` image) over IP on every commit, checks the memory
-budget with 100 nodes, fuzzes every parser, and builds static binaries for
+budget with 100 nodes, fuzzes the JSON encoder and onboarding codes, and builds static binaries for
 aarch64 and mipsel. The end-to-end test runs against any commissionable
 device on your network:
 

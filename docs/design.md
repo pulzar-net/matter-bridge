@@ -165,9 +165,8 @@ session.
   read, a command whose effect comes back through the subscription, a write,
   an invoke with a typed response, and a commissioning window through which a
   second controller on another fabric commissions the device too.
-- Fuzzing: TLV → JSON against every shape of the data model, JSON → TLV (with
-  the round trip as the oracle), whole `ReportData` messages through the
-  report decoder, and onboarding codes. No `unsafe` anywhere in this
+- Fuzzing: JSON → TLV against every shape of the data model (with the round
+  trip as the oracle), and onboarding codes. No `unsafe` anywhere in this
   repository (`unsafe_code = "forbid"`).
 - Budget: under 16 MB resident with 100 nodes (in the store, with their
   subscription tasks); binary size reported for aarch64 and mipsel.

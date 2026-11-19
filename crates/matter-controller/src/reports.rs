@@ -7,12 +7,8 @@ use serde_json::Value;
 
 use crate::{AttributeValue, EventValue};
 
-/// Iterate a TLV container a peer sent, after checking it is one.
-///
-/// rs-matter's `TLVContainer` decodes without checking the element is a
-/// container, and its `iter` then panics on one that is not, so a malformed
-/// message from a peer would abort the process. The check is done here until
-/// rs-matter does it when decoding.
+/// Iterate a TLV container a peer sent, after checking that it is one: a
+/// malformed message is refused rather than trusted.
 pub(crate) fn items<'a, T, C>(
     c: &rs_matter::tlv::TLVContainer<'a, T, C>,
 ) -> Result<rs_matter::tlv::TLVContainerIter<'a, T>, rs_matter::error::Error>
@@ -175,12 +171,10 @@ impl Collected {
 mod tests {
     use super::*;
 
-    /// Found by the `report_data` fuzz target: a report whose attribute
-    /// reports are not a list made rs-matter panic.
     #[test]
-    fn a_report_that_is_not_a_list_is_refused_not_a_panic() {
-        let _ = decode_report_data(1, &[0x15, 0x00, 0x75, 0x29, 0x01, 0x00, 0x40]);
+    fn a_report_whose_reports_are_not_a_list_is_refused() {
         // AttributeReportIBs (tag 1) as an unsigned integer.
-        let _ = decode_report_data(1, &[0x15, 0x24, 0x01, 0x05, 0x18]);
+        let (attributes, events) = decode_report_data(1, &[0x15, 0x24, 0x01, 0x05, 0x18]).unwrap();
+        assert!(attributes.is_empty() && events.is_empty());
     }
 }
