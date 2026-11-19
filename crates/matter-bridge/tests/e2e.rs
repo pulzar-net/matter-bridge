@@ -347,7 +347,7 @@ async fn commissions_a_device_and_bridges_it() {
             matter_controller::AttributePath {
                 endpoint: Some(0),
                 cluster: Some(0x003E), // Operational Credentials
-                attribute: Some(2),    // CommissionedFabrics
+                attribute: Some(3),    // CommissionedFabrics
             },
         )
         .await

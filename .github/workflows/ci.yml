@@ -107,14 +107,39 @@ jobs:
           workspaces: fuzz
       # The sanitizers need glibc; name the target so a runner whose default
       # is musl does not pick it.
+      #
+      # A crash at one of KNOWN_UPSTREAM (bugs in rs-matter's TLV reader that
+      # these targets found, being reported to rs-matter) is a warning, not a
+      # failure, so that the job still fails on anything else. Delete each
+      # entry once the rs-matter pin has its fix.
       - name: Fuzz every parser for a short while
+        env:
+          KNOWN_UPSTREAM: >-
+            rs-matter-tlv/src/traits/container.rs:94
+            rs-matter-tlv/src/read.rs:1114
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          failed=0
           for target in $(cargo +"${NIGHTLY}" fuzz list); do
             echo "::group::${target}"
-            cargo +"${NIGHTLY}" fuzz run --target x86_64-unknown-linux-gnu "${target}" -- -max_total_time=60 -rss_limit_mb=1024 -max_len=4096
+            cargo +"${NIGHTLY}" fuzz run --target x86_64-unknown-linux-gnu "${target}" -- -max_total_time=60 -rss_limit_mb=1024 -max_len=4096 2>&1 | tee fuzz.log
+            status=${PIPESTATUS[0]}
             echo "::endgroup::"
+            if [ "${status}" -ne 0 ]; then
+              where="$(grep -oE 'panicked at [^ ]+' fuzz.log | head -1 | sed -E 's/panicked at //; s/:[0-9]+:?$//')"
+              known=no
+              for k in ${KNOWN_UPSTREAM}; do
+                case "${where}" in *"${k}") known=yes ;; esac
+              done
+              if [ "${known}" = yes ]; then
+                echo "::warning::${target}: known rs-matter bug at ${where}"
+              else
+                echo "::error::${target}: crash at ${where:-unknown}"
+                failed=1
+              fi
+            fi
           done
+          exit "${failed}"
 
   cross:
     runs-on: ubuntu-latest
