@@ -118,7 +118,8 @@ jobs:
             rs-matter-tlv/src/traits/container.rs:94
             rs-matter-tlv/src/read.rs:1114
         run: |
-          set -uo pipefail
+          # Steps run under bash -e; a fuzz crash must not end the loop.
+          set +e -uo pipefail
           failed=0
           for target in $(cargo +"${NIGHTLY}" fuzz list); do
             echo "::group::${target}"
