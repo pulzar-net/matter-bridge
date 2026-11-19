@@ -7,6 +7,22 @@ use serde_json::Value;
 
 use crate::{AttributeValue, EventValue};
 
+/// Iterate a TLV container a peer sent, after checking it is one.
+///
+/// rs-matter's `TLVContainer` decodes without checking the element is a
+/// container, and its `iter` then panics on one that is not, so a malformed
+/// message from a peer would abort the process. The check is done here until
+/// rs-matter does it when decoding.
+pub(crate) fn items<'a, T, C>(
+    c: &rs_matter::tlv::TLVContainer<'a, T, C>,
+) -> Result<rs_matter::tlv::TLVContainerIter<'a, T>, rs_matter::error::Error>
+where
+    T: rs_matter::tlv::FromTLV<'a>,
+{
+    c.element().container()?;
+    Ok(c.iter())
+}
+
 /// What one report (all of its chunks) carried.
 #[derive(Default)]
 pub(crate) struct Collected {
@@ -35,8 +51,18 @@ impl Collected {
     /// chunks; they are put back together here, so every value delivered is a
     /// whole list.
     pub fn add_chunk(&mut self, node: u64, resp: &ReportDataResp<'_>) {
-        if let Some(reports) = &resp.attr_reports {
-            for report in reports.iter() {
+        let attr_reports = resp.attr_reports.as_ref().map(items).transpose();
+        let event_reports = resp.event_reports.as_ref().map(items).transpose();
+        let (attr_reports, event_reports) = match (attr_reports, event_reports) {
+            (Ok(a), Ok(e)) => (a, e),
+            _ => {
+                log::warn!("node {node:016X}: malformed report, not a list of reports");
+                return;
+            }
+        };
+
+        if let Some(reports) = attr_reports {
+            for report in reports {
                 match report {
                     Ok(AttrResp::Data(data)) => {
                         let (Some(endpoint), Some(cluster), Some(attribute)) =
@@ -107,8 +133,8 @@ impl Collected {
             }
         }
 
-        if let Some(reports) = &resp.event_reports {
-            for report in reports.iter() {
+        if let Some(reports) = event_reports {
+            for report in reports {
                 match report {
                     Ok(EventResp::Data(data)) => {
                         let (Some(endpoint), Some(cluster), Some(event)) =
@@ -142,5 +168,19 @@ impl Collected {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Found by the `report_data` fuzz target: a report whose attribute
+    /// reports are not a list made rs-matter panic.
+    #[test]
+    fn a_report_that_is_not_a_list_is_refused_not_a_panic() {
+        let _ = decode_report_data(1, &[0x15, 0x00, 0x75, 0x29, 0x01, 0x00, 0x40]);
+        // AttributeReportIBs (tag 1) as an unsigned integer.
+        let _ = decode_report_data(1, &[0x15, 0x24, 0x01, 0x05, 0x18]);
     }
 }

@@ -8,7 +8,6 @@ use std::sync::{Arc, RwLock};
 
 use matter_controller::{AttributePath, CommissionRequest, Controller, Event, Node};
 use serde_json::{json, Value};
-use tokio::sync::broadcast::error::RecvError;
 
 use crate::config::Config;
 use crate::homeassistant::Discovery;
@@ -92,9 +91,8 @@ pub async fn run(config: Config, shutdown: impl Future<Output = ()>) -> Result<(
                 None => break,
             },
             event = events.recv() => match event {
-                Ok(event) => bridge.on_event(event).await,
-                Err(RecvError::Lagged(n)) => tracing::warn!(missed = n, "events came faster than MQTT took them"),
-                Err(RecvError::Closed) => return Err("the controller stopped".into()),
+                Some(event) => bridge.on_event(event).await,
+                None => return Err("the controller stopped".into()),
             },
             () = &mut shutdown => break,
         }

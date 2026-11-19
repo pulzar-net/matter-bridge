@@ -118,11 +118,17 @@ session.
   dependency once it exists and adds a `Transport::Ble` path to commissioning
   (PASE over BTP, then network commissioning, then CASE over IP).
 - **Thread.** A Thread device is commissioned over BLE and given the Thread
-  network's operational dataset (from the border router, OpenThread's
-  ot-br-posix) with `AddOrUpdateThreadNetwork`. The dataset comes in through
-  the commission request (hex TLVs); the platform reads it from the border
-  router's REST API. Operational traffic then reaches the device through the
-  border router, and DNS-SD through its SRP server and advertising proxy.
+  network's active operational dataset with `AddOrUpdateThreadNetwork` and
+  `ConnectNetwork`, over PASE, inside the fail-safe. The dataset comes from
+  `thread_dataset` (hex TLVs, in the configuration or the commission request)
+  or `thread_dataset_url`, an OpenThread border router's REST API
+  (`GET /node/dataset/active` with `Accept: text/plain`, as Home Assistant
+  and python-matter-server read it). It is read at commissioning time, never
+  written to disk or logged; only its extended PAN id (TLV 2) is logged.
+  Operational traffic then reaches the device through the border router, and
+  DNS-SD through its SRP server and advertising proxy. A Thread device's
+  `ThreadNetworkDiagnostics.ExtAddress` arrives with its other attributes,
+  which lets a platform place the node in the Thread mesh.
 
 ## Later, designed for now
 

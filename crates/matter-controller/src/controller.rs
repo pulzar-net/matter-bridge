@@ -38,12 +38,12 @@ use rs_matter::transport::network::{Address, NoNetwork};
 use rs_matter::utils::init::InitMaybeUninit as _;
 use rs_matter::Matter;
 use serde_json::{json, Value};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::ca::{CertificateAuthority, FileCa};
 use crate::identity::Identity;
 use crate::onboarding::Onboarding;
-use crate::reports::Collected;
+use crate::reports::{items, Collected};
 use crate::store::{BasicInfo, DeviceType, Endpoint, Node, NodeStore};
 use crate::{
     AttributePath, AttributeValue, CommissionRequest, CommissionStep, Commissionable,
@@ -65,11 +65,35 @@ const MAX_PAYLOAD: usize = 1024;
 #[derive(Clone)]
 pub struct Controller {
     jobs: mpsc::UnboundedSender<Job>,
-    events: broadcast::Sender<Event>,
+    events: EventBus,
     info: ControllerInfo,
 }
 
 type Reply<T> = oneshot::Sender<Result<T, Error>>;
+
+/// Hands every [`Event`] to every receiver [`Controller::events`] gave out,
+/// without loss; receivers that were dropped are forgotten.
+#[derive(Clone, Default)]
+struct EventBus(std::sync::Arc<std::sync::Mutex<Vec<mpsc::UnboundedSender<Event>>>>);
+
+impl EventBus {
+    fn subscribe(&self) -> mpsc::UnboundedReceiver<Event> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.0.lock().unwrap().push(tx);
+        rx
+    }
+
+    fn send(&self, event: Event) {
+        let mut subscribers = self.0.lock().unwrap();
+        subscribers.retain(|s| !s.is_closed());
+        if let Some((last, rest)) = subscribers.split_last() {
+            for s in rest {
+                let _ = s.send(event.clone());
+            }
+            let _ = last.send(event);
+        }
+    }
+}
 
 enum Job {
     Commission(CommissionRequest, Reply<Node>),
@@ -89,7 +113,7 @@ impl Controller {
     /// identity and node store, and start subscribing to every node.
     pub fn start(config: Config) -> Result<Self, Error> {
         let (jobs_tx, jobs_rx) = mpsc::unbounded_channel();
-        let (events, _) = broadcast::channel(1024);
+        let events = EventBus::default();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let thread_events = events.clone();
@@ -129,7 +153,10 @@ impl Controller {
     }
 
     /// Receive the controller's [`Event`]s from now on.
-    pub fn events(&self) -> broadcast::Receiver<Event> {
+    ///
+    /// Delivery is lossless: a subscription's priming report can carry
+    /// thousands of attributes at once, and each must reach its consumer.
+    pub fn events(&self) -> mpsc::UnboundedReceiver<Event> {
         self.events.subscribe()
     }
 
@@ -265,7 +292,7 @@ struct Ctx<C: 'static> {
     fab_idx: NonZeroU8,
     ca: FileCa,
     store: RefCell<NodeStore>,
-    events: broadcast::Sender<Event>,
+    events: EventBus,
     config: Config,
     subs: Rc<Subscriptions>,
     tasks: RefCell<HashMap<u64, tokio::task::JoinHandle<()>>>,
@@ -290,7 +317,7 @@ struct SubState {
 async fn run(
     config: Config,
     mut jobs: mpsc::UnboundedReceiver<Job>,
-    events: broadcast::Sender<Event>,
+    events: EventBus,
     ready: &std::sync::mpsc::Sender<Result<ControllerInfo, Error>>,
 ) -> Result<(), Error> {
     std::fs::create_dir_all(&config.state_dir)?;
@@ -423,7 +450,7 @@ async fn run(
 /// receives them.
 struct ReportSink {
     subs: Rc<Subscriptions>,
-    events: broadcast::Sender<Event>,
+    events: EventBus,
 }
 
 impl ReportDataHandler for ReportSink {
@@ -466,12 +493,12 @@ impl ReportDataHandler for ReportSink {
     }
 }
 
-fn publish(events: &broadcast::Sender<Event>, collected: Collected) {
+fn publish(events: &EventBus, collected: Collected) {
     for a in collected.attributes {
-        let _ = events.send(Event::Attribute(a));
+        events.send(Event::Attribute(a));
     }
     for e in collected.events {
-        let _ = events.send(Event::Event(e));
+        events.send(Event::Event(e));
     }
 }
 
@@ -484,7 +511,7 @@ fn now_secs() -> u64 {
 /// Reports commissioning steps as events.
 struct Hooks<'a> {
     node: u64,
-    events: &'a broadcast::Sender<Event>,
+    events: &'a EventBus,
 }
 
 impl CommissionHooks for Hooks<'_> {
@@ -501,7 +528,7 @@ impl CommissionHooks for Hooks<'_> {
             S::CommissioningComplete => CommissionStep::CommissioningComplete,
             S::Cleanup => CommissionStep::Cleanup,
         };
-        let _ = self.events.send(Event::Commissioning {
+        self.events.send(Event::Commissioning {
             node: self.node,
             step,
         });
@@ -568,7 +595,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             node: node_id,
             events: &self.events,
         };
-        let _ = self.events.send(Event::Commissioning {
+        self.events.send(Event::Commissioning {
             node: node_id,
             step: CommissionStep::Discovery,
         });
@@ -636,9 +663,9 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             commissioned_at: now_secs(),
         };
         self.store.borrow_mut().put(node.clone())?;
-        let _ = self.events.send(Event::NodeUpdated(node.clone()));
+        self.events.send(Event::NodeUpdated(node.clone()));
 
-        let _ = self.events.send(Event::Commissioning {
+        self.events.send(Event::Commissioning {
             node: node_id,
             step: CommissionStep::Interview,
         });
@@ -763,7 +790,8 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         let exchange = self.exchange(node).await?;
         let handle = exchange
             .write_with(timed, |b| {
-                b.write_requests()?
+                b.timed_request(timed.is_some())?
+                    .write_requests()?
                     .push()?
                     .path(endpoint, cluster, attribute)?
                     .data(|w| {
@@ -774,7 +802,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                     .end()
             })
             .await?;
-        for status in handle.response()?.write_responses.iter() {
+        for status in items(&handle.response()?.write_responses)? {
             let status = status?;
             if status.status.status != IMStatusCode::Success {
                 return Err(Error::Status(format!(
@@ -812,8 +840,12 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
 
         let exchange = self.exchange(node).await?;
         let mut chunk = exchange
+            // A request after a Timed Request says so itself, or the node
+            // refuses it (TIMED_REQUEST_MISMATCH); rs-matter's client
+            // leaves the flag to the caller.
             .invoke_with(timed, |b| {
-                b.invoke_requests()?
+                b.timed_request(timed.is_some())?
+                    .invoke_requests()?
                     .push()?
                     .path(endpoint, cluster, command)?
                     .data(|w| {
@@ -829,7 +861,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         loop {
             if let Some(resp) = chunk.response()? {
                 if let Some(responses) = &resp.invoke_responses {
-                    for r in responses.iter() {
+                    for r in items(responses)? {
                         match r? {
                             CmdResp::Cmd(data) => {
                                 let shape = data
@@ -932,7 +964,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         node.interviewed = true;
 
         self.store.borrow_mut().put(node.clone())?;
-        let _ = self.events.send(Event::NodeUpdated(node.clone()));
+        self.events.send(Event::NodeUpdated(node.clone()));
         Ok(node)
     }
 
@@ -1051,7 +1083,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             state.sessions.remove_case_for_peer(self.fab_idx, node_id);
         });
         self.store.borrow_mut().remove(node_id)?;
-        let _ = self.events.send(Event::NodeRemoved { node: node_id });
+        self.events.send(Event::NodeRemoved { node: node_id });
         Ok(())
     }
 
@@ -1064,7 +1096,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         let mut node = self.known(node_id)?;
         node.name = name;
         self.store.borrow_mut().put(node.clone())?;
-        let _ = self.events.send(Event::NodeUpdated(node.clone()));
+        self.events.send(Event::NodeUpdated(node.clone()));
         Ok(node)
     }
 
@@ -1087,7 +1119,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                     backoff = Duration::from_secs(1);
                     if !online {
                         online = true;
-                        let _ = self.events.send(Event::Availability { node, online });
+                        self.events.send(Event::Availability { node, online });
                     }
                     if !self.node_interviewed(node) {
                         if let Err(e) = self.interview(node).await {
@@ -1112,7 +1144,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                     log::info!("node {node:016X}: subscribe: {e}; retrying in {backoff:?}");
                     if online {
                         online = false;
-                        let _ = self.events.send(Event::Availability { node, online });
+                        self.events.send(Event::Availability { node, online });
                     }
                     tokio::time::sleep(backoff).await;
                     backoff = (backoff * 2).min(Duration::from_secs(300));
