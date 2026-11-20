@@ -141,8 +141,8 @@ bridge as a service, see [installation](#installation).
   `SHA256SUMS` file. They have no runtime dependencies.
 - **From source**, with Rust 1.92 or newer:
   `cargo install --locked --git https://github.com/pulzar-net/matter-bridge matter-bridge`
-- **systemd**: a hardened unit is in [`dist/systemd/`](dist/systemd/matter-bridge.service).
-- **OpenWrt**: a procd init script is in [`dist/openwrt/`](dist/openwrt/matter-bridge.init).
+- **systemd**: a hardened unit is in [`contrib/systemd/`](contrib/systemd/matter-bridge.service).
+- **OpenWrt**: a procd init script is in [`contrib/openwrt/`](contrib/openwrt/matter-bridge.init).
 
 The [installation guide](https://pulzar-net.github.io/matter-bridge/installation.html)
 covers each one step by step.

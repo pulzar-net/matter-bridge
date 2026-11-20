@@ -55,14 +55,14 @@ Matter runs over IPv6 on the local network, and finds devices with DNS-SD
 ## As a systemd service
 
 The repository has a hardened unit in
-[`dist/systemd/matter-bridge.service`](https://github.com/pulzar-net/matter-bridge/blob/main/dist/systemd/matter-bridge.service).
+[`contrib/systemd/matter-bridge.service`](https://github.com/pulzar-net/matter-bridge/blob/main/contrib/systemd/matter-bridge.service).
 It runs the bridge as an unprivileged dynamic user and keeps the fabric in
 `/var/lib/matter-bridge`.
 
 ```sh
 sudo mkdir -p /etc/matter-bridge
 sudo cp config.example.toml /etc/matter-bridge/config.toml   # then edit it
-sudo install -m 0644 dist/systemd/matter-bridge.service /etc/systemd/system/
+sudo install -m 0644 contrib/systemd/matter-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now matter-bridge
 journalctl -u matter-bridge -f
@@ -84,7 +84,7 @@ The `mipsel` binary runs on MT7621 and MT7628 routers with OpenWrt.
    device.
 3. Allow UDP 5541 and 5353 from the LAN zone in the firewall.
 4. Install the procd script from
-   [`dist/openwrt/matter-bridge.init`](https://github.com/pulzar-net/matter-bridge/blob/main/dist/openwrt/matter-bridge.init):
+   [`contrib/openwrt/matter-bridge.init`](https://github.com/pulzar-net/matter-bridge/blob/main/contrib/openwrt/matter-bridge.init):
 
 ```sh
 cp matter-bridge.init /etc/init.d/matter-bridge
