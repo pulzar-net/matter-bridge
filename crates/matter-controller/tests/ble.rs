@@ -205,9 +205,13 @@ fn start_device(bt_port: u16, kv_dir: std::path::PathBuf) {
             .unwrap();
         let local = tokio::task::LocalSet::new();
         local.block_on(&rt, async move {
+            // Bumble's simulated link routes data by random address only.
             let host = Host::open(
                 &TransportSpec::Tcp(format!("127.0.0.1:{bt_port}")),
-                HostConfig::default(),
+                HostConfig {
+                    use_public_address: false,
+                    ..HostConfig::default()
+                },
             )
             .await
             .expect("device controller");
@@ -293,6 +297,7 @@ async fn commissions_a_device_over_bluetooth() {
     let mut config = Config::new(dir.path());
     config.port = 5543;
     config.bluetooth = Some(format!("tcp:127.0.0.1:{controller_port}"));
+    config.bluetooth_random_address = true;
     config.interface = std::env::var("MATTER_E2E_INTERFACE").ok();
     let controller = tokio::task::spawn_blocking(move || Controller::start(config))
         .await

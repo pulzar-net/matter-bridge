@@ -40,13 +40,15 @@ pub(crate) struct Ble {
 }
 
 impl Ble {
-    pub async fn open(spec: &str, btp: &'static Btp) -> Result<Self, Error> {
+    pub async fn open(spec: &str, random_address: bool, btp: &'static Btp) -> Result<Self, Error> {
         let spec: bluetooth_host::TransportSpec = spec
             .parse()
             .map_err(|e| Error::Invalid(format!("bluetooth: {e}")))?;
-        let host = Host::open(&spec, bluetooth_host::HostConfig::default())
-            .await
-            .map_err(ble_err)?;
+        let config = bluetooth_host::HostConfig {
+            use_public_address: !random_address,
+            ..Default::default()
+        };
+        let host = Host::open(&spec, config).await.map_err(ble_err)?;
         log::info!("Bluetooth on {spec}");
         Ok(Self { host, btp })
     }

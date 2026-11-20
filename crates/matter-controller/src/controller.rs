@@ -472,7 +472,9 @@ async fn run(
             .init_with(rs_matter::transport::network::btp::Btp::init());
     #[cfg(feature = "ble")]
     let ble = match &config.bluetooth {
-        Some(spec) => Some(crate::ble::Ble::open(spec, btp).await?),
+        Some(spec) => {
+            Some(crate::ble::Ble::open(spec, config.bluetooth_random_address, btp).await?)
+        }
         None => None,
     };
     #[cfg(not(feature = "ble"))]

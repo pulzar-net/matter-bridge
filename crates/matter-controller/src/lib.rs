@@ -114,6 +114,9 @@ pub struct Config {
     /// HCI user channel; BlueZ must not be using it) or `tcp:host:port` (H4
     /// over TCP). Needs the `ble` feature.
     pub bluetooth: Option<String>,
+    /// Run Bluetooth on a static random address instead of the controller's
+    /// public one (simulated controllers such as Bumble's route only those).
+    pub bluetooth_random_address: bool,
     /// The longest a subscription may stay silent before it is renewed,
     /// seconds (the device may agree to less).
     pub max_report_interval: u16,
@@ -131,6 +134,7 @@ impl Config {
             vendor_id: 0xFFF1,
             allow_unverified_attestation: true,
             bluetooth: None,
+            bluetooth_random_address: false,
             max_report_interval: 60,
         }
     }
