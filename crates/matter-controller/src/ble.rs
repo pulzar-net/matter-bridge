@@ -160,7 +160,10 @@ async fn pump(
 ) -> Result<(), Error> {
     let gatt = conn.gatt();
     let setup = async {
-        let _ = gatt.exchange_mtu(ATT_MTU).await;
+        match gatt.exchange_mtu(ATT_MTU).await {
+            Ok(mtu) => log::debug!("ATT MTU {mtu}"),
+            Err(e) => log::warn!("ATT MTU exchange: {e}"),
+        }
         let service = gatt
             .services_by_uuid(Uuid::Uuid16(MATTER_SERVICE))
             .await
@@ -168,6 +171,7 @@ async fn pump(
             .into_iter()
             .next()
             .ok_or_else(|| Error::Bluetooth("the device has no Matter GATT service".into()))?;
+        log::debug!("Matter GATT service at {}..{}", service.start, service.end);
         let chars = gatt.characteristics(&service).await.map_err(ble_err)?;
         let find = |uuid: [u8; 16]| {
             chars
@@ -209,6 +213,7 @@ async fn pump(
         let _ = ready.send(Err(Error::Bluetooth(e.to_string())));
         return Err(e);
     }
+    log::debug!("BTP handshake sent, C2 subscribed");
     let _ = ready.send(Ok(()));
 
     let incoming = async {

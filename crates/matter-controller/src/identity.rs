@@ -43,7 +43,8 @@ impl Identity {
         let secret = crypto.generate_secret_key()?;
         let mut csr_buf = [0u8; 256];
         let csr = secret.csr(&mut csr_buf)?;
-        let noc = ca.issue_noc(crypto, csr, node_id, &[]).await?;
+        let cats: Vec<u32> = ca.admin_cat().into_iter().collect();
+        let noc = ca.issue_noc(crypto, csr, node_id, &cats).await?;
 
         let mut canon = CanonPkcSecretKey::new();
         secret.write_canon(&mut canon)?;

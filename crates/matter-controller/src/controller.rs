@@ -40,7 +40,7 @@ use rs_matter::Matter;
 use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::ca::{CertificateAuthority, FileCa};
+use crate::ca::{AnyCa, CertificateAuthority, FileCa, IntermediateCa};
 use crate::identity::Identity;
 use crate::onboarding::Onboarding;
 
@@ -304,7 +304,7 @@ struct Ctx<C: 'static> {
     matter: &'static Matter<'static>,
     crypto: C,
     fab_idx: NonZeroU8,
-    ca: FileCa,
+    ca: AnyCa,
     store: RefCell<NodeStore>,
     events: EventBus,
     config: Config,
@@ -346,7 +346,16 @@ async fn run(
         CanonPkcSecretKeyRef::new(singleton),
     )));
 
-    let ca = FileCa::open_or_create(&config.state_dir.join("ca.json"), config.fabric_id, crypto)?;
+    let ca = match config.ca {
+        crate::CaChoice::File => AnyCa::File(FileCa::open_or_create(
+            &config.state_dir.join("ca.json"),
+            config.fabric_id,
+            crypto,
+        )?),
+        crate::CaChoice::Intermediate => AnyCa::Intermediate(IntermediateCa::open(
+            &config.state_dir.join("intermediate.json"),
+        )?),
+    };
     let identity =
         Identity::load_or_create(&config.state_dir.join("controller.json"), &ca, crypto).await?;
     let store = NodeStore::open(&config.state_dir.join("nodes.json"))?;

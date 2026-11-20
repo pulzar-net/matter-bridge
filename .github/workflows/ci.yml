@@ -106,7 +106,7 @@ jobs:
       - name: Commission a device over Bluetooth LE (Bumble), then reach it over IP
         env:
           BUMBLE_PYTHON: python
-          RUST_LOG: info
+          RUST_LOG: info,matter_controller=debug,bluetooth_host=debug,rs_matter_transport=debug
         run: cargo test -p matter-controller --test ble -- --ignored --nocapture
 
   fuzz:

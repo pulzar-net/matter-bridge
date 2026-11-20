@@ -259,6 +259,13 @@ fn free_port() -> u16 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "needs Bumble (BUMBLE_PYTHON) and a network interface"]
 async fn commissions_a_device_over_bluetooth() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,matter_controller=debug,bluetooth_host=debug".into()),
+        )
+        .with_test_writer()
+        .try_init();
     let python = std::env::var("BUMBLE_PYTHON").expect("BUMBLE_PYTHON");
     let (controller_port, device_port) = (free_port(), free_port());
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/bumble/link.py");

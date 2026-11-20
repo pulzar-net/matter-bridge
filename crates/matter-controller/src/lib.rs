@@ -38,7 +38,7 @@ use std::path::PathBuf;
 use serde::Serialize;
 use serde_json::Value;
 
-pub use ca::{CertificateAuthority, FileCa};
+pub use ca::{CertificateAuthority, FileCa, IntermediateCa, Issued, NodeIdRange};
 pub use controller::Controller;
 pub use onboarding::{Discriminator, Onboarding};
 pub use reports::decode_report_data;
@@ -113,6 +113,8 @@ pub struct Config {
     /// The fabric id of a new fabric; random if `None`. Ignored once the
     /// fabric exists.
     pub fabric_id: Option<u64>,
+    /// Where the fabric's certificates come from.
+    pub ca: CaChoice,
     /// Vendor id the controller administers nodes as (`0xFFF1` is the CSA's
     /// test vendor id, for uncertified controllers).
     pub vendor_id: u16,
@@ -139,12 +141,25 @@ impl Config {
             port: 5541,
             interface: None,
             fabric_id: None,
+            ca: CaChoice::File,
             vendor_id: 0xFFF1,
             allow_unverified_attestation: true,
             bluetooth: None,
             max_report_interval: 60,
         }
     }
+}
+
+/// Where a controller's fabric certificates come from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CaChoice {
+    /// A fabric of its own, its CA in `ca.json` in the state directory
+    /// ([`FileCa`]), made on first start.
+    #[default]
+    File,
+    /// An intermediate under a root CA elsewhere, installed in
+    /// `intermediate.json` with [`ca::IntermediateCa::install`].
+    Intermediate,
 }
 
 /// What to commission.
