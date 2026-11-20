@@ -1,4 +1,7 @@
-# Devices
+---
+title: "Devices"
+description: "Matter devices describe themselves: the Descriptor cluster lists each endpoint's device types and clusters, and the bridge's data model knows every standard cluster."
+---
 
 Matter devices describe themselves: the Descriptor cluster lists each
 endpoint's device types and clusters, and the bridge's data model knows
@@ -36,6 +39,6 @@ work too, by number, with values decoded from their self-describing TLV.
 ## Limits
 
 - **More than 64 live nodes** needs a change in rs-matter's session limit;
-  see [Design](design.md#upstream-work-rs-matter).
+  see [Design](/matter-bridge/design.html#upstream-work-rs-matter).
 - **Device attestation** is not verified yet; see the
-  [security model](security.md).
+  [security model](/matter-bridge/security.html).

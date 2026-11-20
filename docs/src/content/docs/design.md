@@ -1,4 +1,7 @@
-# Design
+---
+title: "Design"
+description: "How matter-bridge is put together, what it needs from rs-matter that rs-matter does not have yet, and how the next pieces fit."
+---
 
 How matter-bridge is put together, what it needs from rs-matter that rs-matter
 does not have yet, and how the next pieces fit.

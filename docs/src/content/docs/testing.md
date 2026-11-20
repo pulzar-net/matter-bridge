@@ -1,4 +1,7 @@
-# Testing
+---
+title: "Testing"
+description: "CI runs every test on every commit."
+---
 
 CI runs every test on every commit.
 
@@ -72,7 +75,7 @@ cargo +nightly fuzz run json_to_tlv -- -max_total_time=600
 ## Documentation
 
 The `docs` workflow checks the claims this site makes: the
-[configuration reference](config-reference.md) is regenerated from the code
+[configuration reference](/matter-bridge/config-reference.html) is regenerated from the code
 and compared, every doctest runs (the README's and the library guide's
 examples among them), the README's quick start runs, the workspace builds on
 the minimum supported Rust version, and every relative link resolves.

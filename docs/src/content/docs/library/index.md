@@ -1,12 +1,15 @@
-# The library crates
+---
+title: "The library crates"
+description: "matter-bridge is built as library crates with a thin binary on top."
+---
 
 matter-bridge is built as library crates with a thin binary on top.
 
 | Crate | Use it to |
 |---|---|
-| [matter-controller](matter-controller.md) | run a Matter controller from Rust: commission, read, write, invoke, subscribe |
-| [matter-model](matter-model.md) | name clusters, attributes, commands and events, and convert between JSON and Matter TLV |
-| [matter-bridge](matter-bridge.md) | run or embed the bridge itself |
+| [matter-controller](/matter-bridge/library/matter-controller.html) | run a Matter controller from Rust: commission, read, write, invoke, subscribe |
+| [matter-model](/matter-bridge/library/matter-model.html) | name clusters, attributes, commands and events, and convert between JSON and Matter TLV |
+| [matter-bridge](/matter-bridge/library/matter-bridge.html) | run or embed the bridge itself |
 
 The [API documentation](https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html) covers every public
 item.
@@ -22,7 +25,7 @@ matter-controller = { git = "https://github.com/pulzar-net/matter-bridge", tag =
 ```
 
 While the project is at 0.x, minor versions may break the API; the
-[changelog](../changelog.md) says what changed.
+[changelog](/matter-bridge/changelog.html) says what changed.
 
 ## Conventions
 

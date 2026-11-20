@@ -1,7 +1,10 @@
-# Installation
+---
+title: "Installation"
+description: "matter-bridge is one static Linux binary."
+---
 
 matter-bridge is one static Linux binary. Pick one of the ways below, then
-[configure](configuration.md) it.
+[configure](/matter-bridge/configuration.html) it.
 
 ## Release binaries
 

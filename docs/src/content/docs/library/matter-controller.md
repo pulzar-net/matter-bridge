@@ -1,4 +1,7 @@
-# matter-controller
+---
+title: "matter-controller"
+description: "A Matter controller on rs-matter."
+---
 
 A Matter controller on rs-matter. [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html).
 

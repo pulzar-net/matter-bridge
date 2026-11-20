@@ -1,4 +1,7 @@
-# MQTT API
+---
+title: "MQTT API"
+description: "The bridge publishes and listens under one base topic, matter unless mqtt.base_topic says otherwise."
+---
 
 The bridge publishes and listens under one base topic, `matter` unless
 `mqtt.base_topic` says otherwise. Payloads are JSON. This page uses the
@@ -197,4 +200,4 @@ event topics.
 ## Home Assistant topics
 
 With `homeassistant.enabled` (the default), the bridge also publishes
-discovery messages under `homeassistant/`. See [Home Assistant](home-assistant.md).
+discovery messages under `homeassistant/`. See [Home Assistant](/matter-bridge/home-assistant.html).

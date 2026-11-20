@@ -1,0 +1,66 @@
+---
+title: matter-bridge
+description: A Matter controller and Matter to MQTT bridge in Rust, on rs-matter, as one static binary for routers, gateways and servers.
+template: splash
+---
+
+import { Hero, Features, ReleaseDownload, StatusMatrix } from '@pulzar-net/docs-theme/components';
+import { LinkCard, CardGrid, Aside } from '@astrojs/starlight/components';
+
+<Hero
+	eyebrow="Pulzar open source"
+	title="matter-bridge"
+	tagline="A Matter controller and Matter to MQTT bridge in Rust, on rs-matter. It commissions devices onto a fabric of its own and publishes every attribute and event, with Home Assistant discovery."
+	actions={[
+		{ text: 'Get started', link: '/matter-bridge/getting-started.html', icon: 'right-arrow' },
+		{ text: 'Commissioning', link: '/matter-bridge/commissioning.html', variant: 'minimal' },
+		{ text: 'GitHub', link: 'https://github.com/pulzar-net/matter-bridge', variant: 'minimal', icon: 'github' },
+	]}
+/>
+
+<Aside type="caution" title="Device attestation is not verified yet">
+	The bridge cannot yet tell a certified device from a counterfeit one, so `allow_unverified_attestation` must stay on. Only commission devices you trust. See the [security model](/matter-bridge/security.html).
+</Aside>
+
+<Features
+	items={[
+		{ title: 'Commission over IP and Bluetooth', body: 'QR and manual codes; DNS-SD discovery; Bluetooth LE with Wi-Fi or Thread credentials.', icon: 'approve-check', link: '/matter-bridge/commissioning.html' },
+		{ title: 'Any cluster, in JSON', body: 'Read, write, invoke and events on every cluster, named from the CSA\'s data model.', icon: 'seti:json', link: '/matter-bridge/mqtt.html' },
+		{ title: 'Multi-admin', body: 'Add devices you already use in Apple Home or Google Home, and share the bridge\'s with them.', icon: 'random', link: '/matter-bridge/commissioning.html#devices-already-in-another-ecosystem' },
+		{ title: 'Home Assistant', body: 'Lights, switches and sensors appear through MQTT discovery.', icon: 'puzzle', link: '/matter-bridge/home-assistant.html' },
+		{ title: 'Groups', body: 'Put endpoints in groups and switch them together with one multicast command.', icon: 'list-format', link: '/matter-bridge/mqtt.html#groups' },
+		{ title: 'Tested against the reference device', body: 'CI commissions connectedhomeip\'s all-clusters app on every commit; the quick start runs there too.', icon: 'laptop', link: '/matter-bridge/testing.html' },
+	]}
+/>
+
+## Install
+
+<ReleaseDownload repo="pulzar-net/matter-bridge" version="0.1.0" binary="matter-bridge" />
+
+Then follow [getting started](/matter-bridge/getting-started.html) to commission a device, or
+[install it as a service](/matter-bridge/installation.html).
+
+## Status
+
+matter-bridge is 0.x: CI commissions and controls the CSA's reference device on every commit, but commercial devices have not been tested yet.
+
+<StatusMatrix
+	rows={[
+		{ feature: 'Commissioning over IP; read, write, invoke, events; subscriptions', status: 'done', note: '0.1.0' },
+		{ feature: 'Commissioning over Bluetooth LE with Wi-Fi credentials (simulated controllers)', status: 'done', note: '0.1.0' },
+		{ feature: 'Thread credentials (tested up to the request; no Thread device in CI)', status: 'done', note: '0.1.0' },
+		{ feature: 'Groups; an intermediate CA under a root held elsewhere', status: 'done', note: '0.1.0' },
+		{ feature: 'Device attestation verification', status: 'progress' },
+		{ feature: 'More than 64 live nodes', status: 'progress' },
+		{ feature: 'OTA, sleepy (ICD) devices, exposing other devices as a Matter bridge', status: 'planned' },
+	]}
+/>
+
+## Where to go next
+
+<CardGrid>
+	<LinkCard title="Devices" description="What the bridge can reach, and how it was tested." href="/matter-bridge/devices.html" />
+	<LinkCard title="MQTT API" description="Every topic, request and payload." href="/matter-bridge/mqtt.html" />
+	<LinkCard title="Configuration reference" description="Every key, generated from the code." href="/matter-bridge/config-reference.html" />
+	<LinkCard title="API documentation" description="Every crate, type and function." href="https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html" />
+</CardGrid>

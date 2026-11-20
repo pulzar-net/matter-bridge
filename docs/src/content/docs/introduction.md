@@ -1,4 +1,7 @@
-# matter-bridge
+---
+title: "matter-bridge"
+description: "matter-bridge is a Matter controller and a Matter to MQTT bridge, written in Rust on rs-matter."
+---
 
 matter-bridge is a Matter controller and a Matter to MQTT bridge, written in
 Rust on [rs-matter](https://github.com/project-chip/rs-matter). It
@@ -17,15 +20,15 @@ cover every type and function.
 
 | You want to | Read |
 |---|---|
-| try it with a reference device | [Getting started](getting-started.md) |
-| run it | [Installation](installation.md) |
-| add devices | [Commissioning](commissioning.md) |
-| connect it to Home Assistant | [Home Assistant](home-assistant.md) |
-| script it or build on its topics | [MQTT API](mqtt.md) |
-| change a setting | [Configuration](configuration.md) and the [reference](config-reference.md) |
-| embed the controller in Rust | [Library overview](library/index.md) |
-| understand how it works | [Architecture](architecture.md), [Design](design.md) |
-| fix a problem | [Troubleshooting and FAQ](troubleshooting.md) |
+| try it with a reference device | [Getting started](/matter-bridge/getting-started.html) |
+| run it | [Installation](/matter-bridge/installation.html) |
+| add devices | [Commissioning](/matter-bridge/commissioning.html) |
+| connect it to Home Assistant | [Home Assistant](/matter-bridge/home-assistant.html) |
+| script it or build on its topics | [MQTT API](/matter-bridge/mqtt.html) |
+| change a setting | [Configuration](/matter-bridge/configuration.html) and the [reference](/matter-bridge/config-reference.html) |
+| embed the controller in Rust | [Library overview](/matter-bridge/library.html) |
+| understand how it works | [Architecture](/matter-bridge/architecture.html), [Design](/matter-bridge/design.html) |
+| fix a problem | [Troubleshooting and FAQ](/matter-bridge/troubleshooting.html) |
 
 ## Status
 

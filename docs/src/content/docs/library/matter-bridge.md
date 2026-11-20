@@ -1,4 +1,7 @@
-# matter-bridge (crate)
+---
+title: "matter-bridge (crate)"
+description: "The bridge as a library: the same code as the binary."
+---
 
 The bridge as a library: the same code as the binary. [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_bridge/index.html).
 
@@ -7,5 +10,5 @@ The bridge as a library: the same code as the binary. [API docs](https://pulzar-
   `Config::controller` gives the controller's configuration from it.
 - The topic scheme and Home Assistant discovery are in its modules.
 
-The [MQTT API](../mqtt.md) and [configuration reference](../config-reference.md)
+The [MQTT API](/matter-bridge/mqtt.html) and [configuration reference](/matter-bridge/config-reference.html)
 document the behavior.

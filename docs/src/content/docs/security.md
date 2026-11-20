@@ -1,4 +1,7 @@
-# Security model
+---
+title: "Security model"
+description: "This page describes what matter-bridge protects, what it relies on you for, and what it cannot do yet."
+---
 
 This page describes what matter-bridge protects, what it relies on you for,
 and what it cannot do yet. To report a vulnerability, see
@@ -44,7 +47,7 @@ reported to rs-matter's own security process; we will help coordinate.
   not implemented yet; `allow_unverified_attestation` must stay on, and the
   bridge logs a warning for every device it commissions. **Only commission
   devices you trust.** This is the first item of the
-  [upstream work](design.md#upstream-work-rs-matter).
+  [upstream work](/matter-bridge/design.html#upstream-work-rs-matter).
 - **Test vendor id.** The bridge administers devices as vendor id `0xFFF1`,
   the CSA's test vendor id for uncertified controllers.
 - **No TLS to the MQTT broker yet.** Run the broker on the same host or a

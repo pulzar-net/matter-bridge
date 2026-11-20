@@ -1,18 +1,21 @@
-# Home Assistant
+---
+title: "Home Assistant"
+description: "matter-bridge works with Home Assistant through its MQTT integration and MQTT discovery."
+---
 
 matter-bridge works with Home Assistant through its
 [MQTT integration](https://www.home-assistant.io/integrations/mqtt/) and
 MQTT discovery. It is an alternative to Home Assistant's own Matter
 integration, not a companion: devices the bridge commissions are on the
 bridge's fabric. A device can be on both, through
-[multi-admin](commissioning.md#devices-already-in-another-ecosystem).
+[multi-admin](/matter-bridge/commissioning.html#devices-already-in-another-ecosystem).
 
 ## Setup
 
 1. Run an MQTT broker, such as the
    [Mosquitto add-on](https://github.com/home-assistant/addons/tree/master/mosquitto).
 2. Add the MQTT integration in Home Assistant and point it at the broker.
-3. Point matter-bridge at the same broker and [commission](commissioning.md)
+3. Point matter-bridge at the same broker and [commission](/matter-bridge/commissioning.html)
    devices.
 
 ## What is created
@@ -32,7 +35,7 @@ each endpoint serves and what its device type says it is:
 | Power Source battery level | `sensor` (battery) |
 
 Everything else (other clusters, commands, events) is on the plain
-[MQTT topics](mqtt.md).
+[MQTT topics](/matter-bridge/mqtt.html).
 
 An entity is available while both the bridge (`matter/bridge/state`) and
 the device's subscription (`matter/<device>/availability`) are online.

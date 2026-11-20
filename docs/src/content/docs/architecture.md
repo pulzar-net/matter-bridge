@@ -1,4 +1,7 @@
-# Architecture
+---
+title: "Architecture"
+description: "Matter is an application layer over IPv6."
+---
 
 ## Who does what
 
@@ -34,7 +37,7 @@ devices. matter-bridge is a controller, built on
  Matter devices (Ethernet, Wi-Fi, Thread through a border router)
 ```
 
-The [design page](design.md) goes deeper: why the controller runs on its own
+The [design page](/matter-bridge/design.html) goes deeper: why the controller runs on its own
 thread, how subscriptions are renewed, the CA trait, and what is planned.
 
 ## The life of a report

@@ -1,4 +1,7 @@
-# Commissioning
+---
+title: "Commissioning"
+description: "Commissioning adds a device to the bridge's fabric."
+---
 
 Commissioning adds a device to the bridge's fabric. You need the device's
 **pairing code** and a way to reach the device.

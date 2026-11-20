@@ -1,4 +1,7 @@
-# Getting started
+---
+title: "Getting started"
+description: "This page runs matter-bridge end to end with connectedhomeip's reference device, chip-all-clusters-app, the device the CSA's certification tests use and the one CI commissions on every commit."
+---
 
 This page runs matter-bridge end to end with connectedhomeip's reference
 device, `chip-all-clusters-app`, the device the CSA's certification tests
@@ -78,7 +81,7 @@ matter/lamp/1/on_off/on_off false
 ```
 
 The bridge logs a warning that the device's attestation was not verified:
-see [Security model](security.md).
+see [Security model](/matter-bridge/security.html).
 
 ## 5. Control it
 
@@ -103,6 +106,6 @@ device to their own fabric.
 
 ## Next steps
 
-- [Install](installation.md) a release binary as a service.
-- Read [Commissioning](commissioning.md) for real devices and the
-  [MQTT API](mqtt.md) for every request.
+- [Install](/matter-bridge/installation.html) a release binary as a service.
+- Read [Commissioning](/matter-bridge/commissioning.html) for real devices and the
+  [MQTT API](/matter-bridge/mqtt.html) for every request.

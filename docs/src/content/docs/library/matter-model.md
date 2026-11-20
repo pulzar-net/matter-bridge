@@ -1,4 +1,7 @@
-# matter-model
+---
+title: "matter-model"
+description: "The Matter data model, as static tables, and conversion between JSON and Matter TLV."
+---
 
 The Matter data model, as static tables, and conversion between JSON and
 Matter TLV. No I/O. [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_model/index.html).

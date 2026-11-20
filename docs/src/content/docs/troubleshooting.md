@@ -1,4 +1,7 @@
-# Troubleshooting and FAQ
+---
+title: "Troubleshooting and FAQ"
+description: "Start with the log: RUST_LOG=debug shows each step of commissioning and every report."
+---
 
 Start with the log: `RUST_LOG=debug` shows each step of commissioning and
 every report.
@@ -49,15 +52,15 @@ the request.
 **Can I use the bridge and Home Assistant's Matter integration (or Apple
 Home, or Google Home) together?** Yes, through multi-admin: the device joins
 several fabrics, one per controller. See
-[Commissioning](commissioning.md#devices-already-in-another-ecosystem).
+[Commissioning](/matter-bridge/commissioning.html#devices-already-in-another-ecosystem).
 
 **Why does the log warn about attestation?** The bridge cannot verify device
 attestation yet, so it cannot tell a certified device from a counterfeit
-one. Only commission devices you trust. See the [security model](security.md).
+one. Only commission devices you trust. See the [security model](/matter-bridge/security.html).
 
 **Does it expose Zigbee or other devices to Apple Home or Google Home (a
 Matter bridge in the other direction)?** Not yet; it is designed, see
-[Design](design.md).
+[Design](/matter-bridge/design.html).
 
 **Where do I ask a question?** In
 [Discussions](https://github.com/pulzar-net/matter-bridge/discussions).
