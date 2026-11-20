@@ -59,6 +59,7 @@ each serves (from Descriptor). The same shape is in the `commission`,
 | `commissioning` | `node`, `step`: one per step of a commissioning |
 | `node_updated` | `node`: commissioned, interviewed or renamed |
 | `node_removed` | `node` |
+| `check_in` | `node`: a sleeping device woke; its subscription is renewed and queued requests go out |
 | `ota` | `node`, `step` (`offered`, `applying`, `applied`), `version` |
 | `availability` | `node`, `online`: its subscription started or lapsed |
 
@@ -164,6 +165,16 @@ mosquitto_pub -t matter/bridge/request/group_invoke -m '{"group": 7, "cluster": 
 
 Group commands are not acknowledged; each member's new state comes back
 through its subscription.
+
+### Sleeping devices
+
+A device that sleeps most of the time (an intermittently connected device,
+or ICD, such as a battery sensor) is registered for Check-Ins when it is
+commissioned, if it supports them: it gets a key, and sends the bridge an
+encrypted Check-In whenever it wakes with no subscription from it. The bridge
+subscribes again then, and a request to a device that is asleep waits for its
+next Check-In (up to its idle interval and a minute) instead of failing. The
+keys stay in `icd.json` in `data.dir`, readable only by the bridge.
 
 ### Software updates
 

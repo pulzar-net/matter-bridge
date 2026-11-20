@@ -7,6 +7,7 @@ pub mod ca;
 mod controller;
 mod fsutil;
 mod groups;
+mod icd;
 mod identity;
 mod mdns;
 pub mod network;
@@ -318,6 +319,12 @@ pub enum Event {
         node: u64,
         /// Whether it is reachable.
         online: bool,
+    },
+    /// An intermittently connected node woke and checked in: its
+    /// subscription is renewed and requests queued for it go out.
+    CheckIn {
+        /// The node.
+        node: u64,
     },
     /// A step of a node's software update from this controller.
     Ota {

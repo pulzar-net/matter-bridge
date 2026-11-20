@@ -14,6 +14,13 @@ All notable changes are listed here. The project follows
   node to ask now; `ota_images` lists the images; `Event::Ota` (bridge event
   `ota`) follows each update. CI updates connectedhomeip's
   `chip-ota-requestor-app` with it.
+- Intermittently connected devices: a node whose ICD Management cluster
+  supports Check-In is registered when commissioned, with a key kept in
+  `icd.json` (owner-only). Its Check-Ins (`Event::CheckIn`, bridge event
+  `check_in`) renew its subscription; after a restart the controller waits
+  for one instead of reaching for a sleeping node, and requests to a node
+  asleep wait for its next Check-In. CI checks it with connectedhomeip's
+  `lit-icd-app`.
 
 ## [0.1.0] - 2026-11-20
 

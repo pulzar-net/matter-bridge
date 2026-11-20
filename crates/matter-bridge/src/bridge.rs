@@ -312,6 +312,10 @@ impl Bridge {
                 )
                 .await;
             }
+            Event::CheckIn { node } => {
+                self.publish_bridge_event(&json!({"type": "check_in", "node": node}))
+                    .await;
+            }
             Event::Ota {
                 node,
                 step,

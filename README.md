@@ -51,7 +51,8 @@ Expect rough edges and breaking changes between 0.x releases.
 | Device attestation verification | in progress (blocks production use) |
 | An intermediate CA under a root held elsewhere | done in 0.1.0 |
 | More than 64 live nodes | in progress |
-| OTA, sleepy (ICD) devices | planned |
+| Software updates: the bridge as OTA provider | on main, not yet released; a reference requestor updates in CI |
+| Sleepy (ICD) devices: Check-Ins, requests queued while asleep | on main, not yet released; a reference LIT ICD in CI |
 | Exposing other devices as a Matter bridge | planned |
 
 ## Supported devices
@@ -273,8 +274,7 @@ can accept 0.x maturity and, for now, unverified attestation.
 - **Next:** testing Bluetooth and Thread commissioning on real devices.
 - **In progress:** device attestation verification, more than 64 live
   nodes.
-- **Later:** OTA, sleepy (ICD) devices, exposing other devices as a
-  Matter bridge.
+- **Later:** exposing other devices as a Matter bridge.
 
 The [design page](https://pulzar-net.github.io/matter-bridge/design.html)
 has the details. Questions go in [Discussions](https://github.com/pulzar-net/matter-bridge/discussions); bugs and requests in [issues](https://github.com/pulzar-net/matter-bridge/issues).

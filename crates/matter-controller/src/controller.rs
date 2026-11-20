@@ -51,6 +51,7 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::ca::{AnyCa, CertificateAuthority, FileCa, IntermediateCa};
+use crate::icd::{Icds, Registration};
 use crate::identity::Identity;
 use crate::onboarding::Onboarding;
 use crate::ota::{OtaDir, OtaImage};
@@ -82,6 +83,9 @@ const GROUPCAST: u32 = 0x0065;
 const ACCESS_CONTROL: u32 = 0x001F;
 const NETWORK_COMMISSIONING: u32 = 0x0031;
 const OTA_REQUESTOR: u32 = 0x002A;
+const ICD_MANAGEMENT: u32 = 0x0046;
+/// ICD Management's RegisterClient.
+const REGISTER_CLIENT: u32 = 0x0000;
 /// OTA Software Update Requestor's AnnounceOTAProvider.
 const ANNOUNCE_OTA_PROVIDER: u32 = 0x0000;
 
@@ -410,6 +414,7 @@ struct Ctx<C: 'static> {
     abort: tokio::sync::Notify,
     kv: &'static rs_matter::persist::MatterKvBlobStoreAccess<'static, DummyKvBlobStore>,
     groups: RefCell<crate::groups::GroupKey>,
+    icds: &'static Icds<C>,
     #[cfg(feature = "ble")]
     ble: Option<crate::ble::Ble>,
 }
@@ -425,6 +430,7 @@ struct Subscriptions {
 
 struct SubState {
     id: Option<u32>,
+    max_interval: u16,
     last_report: Instant,
     last_event: Option<u64>,
 }
@@ -585,6 +591,14 @@ async fn run(
         sink,
         im_state,
     )));
+    // Intermittently connected nodes' registrations; the secure channel
+    // hands their Check-Ins over.
+    let icds: &'static Icds<_> = Box::leak(Box::new(Icds::load(
+        &config.state_dir.join("icd.json"),
+        crypto,
+        events.clone(),
+    )?));
+
     // The interaction model and secure channel, and BDX for the images.
     let bdx_buffers: &'static MatterBuffers<2> =
         Box::leak(Box::<MatterBuffers<2>>::new_uninit()).init_with(MatterBuffers::init());
@@ -593,7 +607,7 @@ async fn run(
         ChainedExchangeHandler::new(
             PROTO_ID_INTERACTION_MODEL,
             im,
-            SecureChannel::new(matter, crypto, im),
+            SecureChannel::new_with_handler(matter, crypto, im, icds),
         )
         .chain(PROTO_ID_BDX, Bdx::new(OtaBdxHandler::new(bdx_buffers, ota))),
         matter,
@@ -614,6 +628,7 @@ async fn run(
         abort: tokio::sync::Notify::new(),
         kv,
         groups: RefCell::new(groups),
+        icds,
         #[cfg(feature = "ble")]
         ble,
     });
@@ -622,7 +637,7 @@ async fn run(
 
     let node_ids: Vec<u64> = ctx.store.borrow().nodes().map(|n| n.node_id).collect();
     for node_id in node_ids {
-        ctx.start_subscription(node_id);
+        ctx.start_subscription(node_id, false);
     }
 
     let serve = async {
@@ -842,7 +857,21 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             .ok_or_else(|| Error::Invalid(format!("no node {node}")))
     }
 
+    /// An exchange with `node`; a request to a node asleep waits for its
+    /// Check-In.
     async fn exchange(&self, node: u64) -> Result<Exchange<'static>, Error> {
+        if let Some(icd) = self.icds.get(node) {
+            let subscribed = self.subs.by_node.borrow().get(&node).is_some_and(|s| {
+                s.id.is_some()
+                    && s.last_report.elapsed()
+                        < Duration::from_secs(u64::from(s.max_interval)) + Duration::from_secs(30)
+            });
+            if !subscribed && !self.icds.wait_check_in(node, icd.check_in_wait()).await {
+                return Err(Error::Timeout(format!(
+                    "node {node:016X} is asleep and did not check in"
+                )));
+            }
+        }
         Ok(Exchange::initiate(self.matter, self.crypto, self.fab_idx, node).await?)
     }
 
@@ -960,7 +989,10 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                 node
             }
         };
-        self.start_subscription(node_id);
+        if let Err(e) = self.register_icd(node_id).await {
+            log::warn!("node {node_id:016X}: ICD registration: {e}");
+        }
+        self.start_subscription(node_id, true);
         Ok(node)
     }
 
@@ -1527,6 +1559,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             task.abort();
         }
         self.subs.by_node.borrow_mut().remove(&node_id);
+        self.icds.forget(node_id)?;
         self.matter.with_state(|state| {
             state.sessions.remove_case_for_peer(self.fab_idx, node_id);
         });
@@ -1752,6 +1785,63 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         }
     }
 
+    /// Register with `node` if it is an intermittently connected device that
+    /// checks in: it gets a key of its own to send Check-Ins with.
+    async fn register_icd(&self, node: u64) -> Result<(), Error> {
+        let serves = self
+            .known(node)?
+            .endpoints
+            .get(&ROOT_ENDPOINT)
+            .is_some_and(|e| e.server_clusters.contains(&ICD_MANAGEMENT));
+        if !serves {
+            return Ok(());
+        }
+        const CHECK_IN_PROTOCOL: u64 = 0x1;
+        if self.read_number(node, ICD_MANAGEMENT, 0xFFFC).await? & CHECK_IN_PROTOCOL == 0 {
+            return Ok(());
+        }
+        let idle_mode_duration = self.read_number(node, ICD_MANAGEMENT, 0x0000).await? as u32;
+        let active_mode_duration = self.read_number(node, ICD_MANAGEMENT, 0x0001).await? as u32;
+        let key: [u8; 16] = rand::random();
+        let me = self
+            .matter
+            .with_state(|state| state.fabrics.fabric(self.fab_idx).map(|f| f.node_id()))?;
+        let response = self
+            .invoke(
+                node,
+                ROOT_ENDPOINT,
+                ICD_MANAGEMENT,
+                REGISTER_CLIENT,
+                &json!({
+                    "checkInNodeID": me,
+                    "monitoredSubject": me,
+                    "key": hex::encode(key),
+                    // Permanent
+                    "clientType": 0,
+                }),
+                None,
+            )
+            .await?;
+        let start_counter = response
+            .get("ICDCounter")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| Error::Status("RegisterClient: no ICDCounter".into()))?
+            as u32;
+        log::info!(
+            "node {node:016X}: registered for Check-Ins (sleeps up to {idle_mode_duration} s)"
+        );
+        self.icds.register(
+            node,
+            Registration {
+                key,
+                start_counter,
+                last_counter: None,
+                idle_mode_duration,
+                active_mode_duration,
+            },
+        )
+    }
+
     /// Read one attribute of a node's root endpoint as a number.
     async fn read_number(&self, node: u64, cluster: u32, attribute: u32) -> Result<u64, Error> {
         let values = self
@@ -1865,18 +1955,29 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
 
     /// Keep a subscription to every attribute and event of `node_id`,
     /// re-established whenever it lapses.
-    fn start_subscription(self: &Rc<Self>, node_id: u64) {
+    /// Keep `node` subscribed; `awake` when it is known to be awake now
+    /// (just commissioned), else a sleeping node is first waited for.
+    fn start_subscription(self: &Rc<Self>, node_id: u64, awake: bool) {
         let ctx = self.clone();
-        let task = tokio::task::spawn_local(async move { ctx.subscription(node_id).await });
+        let task = tokio::task::spawn_local(async move { ctx.subscription(node_id, awake).await });
         if let Some(old) = self.tasks.borrow_mut().insert(node_id, task) {
             old.abort();
         }
     }
 
-    async fn subscription(self: Rc<Self>, node: u64) {
+    async fn subscription(self: Rc<Self>, node: u64, awake: bool) {
         let mut backoff = Duration::from_secs(1);
         let mut online = false;
+        // A node that sleeps is subscribed to when it checks in.
+        let mut wait_check_in = !awake;
         loop {
+            if wait_check_in {
+                if let Some(icd) = self.icds.get(node) {
+                    if !self.icds.wait_check_in(node, icd.check_in_wait()).await {
+                        log::info!("node {node:016X}: no Check-In; trying anyway");
+                    }
+                }
+            }
             match self.subscribe(node).await {
                 Ok(max_interval) => {
                     backoff = Duration::from_secs(1);
@@ -1902,12 +2003,17 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                         }
                     }
                     log::info!("node {node:016X}: subscription lapsed, renewing");
+                    wait_check_in = true;
                 }
                 Err(e) => {
                     log::info!("node {node:016X}: subscribe: {e}; retrying in {backoff:?}");
                     if online {
                         online = false;
                         self.events.send(Event::Availability { node, online });
+                    }
+                    if self.icds.get(node).is_some() {
+                        wait_check_in = true;
+                        continue;
                     }
                     tokio::time::sleep(backoff).await;
                     backoff = (backoff * 2).min(Duration::from_secs(300));
@@ -1929,6 +2035,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                 id: None,
                 last_report: Instant::now(),
                 last_event: None,
+                max_interval: 0,
             });
             // Until the node names the new subscription, take any report.
             state.id = None;
@@ -1943,9 +2050,16 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                 event_min: Some(n + 1),
             }]
         });
-        let max_ceil = self.config.max_report_interval;
+        // A sleeping node reports at least once per sleep.
+        let max_ceil = match self.icds.get(node) {
+            Some(icd) => self
+                .config
+                .max_report_interval
+                .max(u16::try_from(icd.idle_mode_duration).unwrap_or(u16::MAX)),
+            None => self.config.max_report_interval,
+        };
 
-        let exchange = self.exchange(node).await?;
+        let exchange = Exchange::initiate(self.matter, self.crypto, self.fab_idx, node).await?;
         let mut chunk = exchange
             .subscribe_with(|b| {
                 let b = b
@@ -1972,6 +2086,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
 
         if let Some(state) = self.subs.by_node.borrow_mut().get_mut(&node) {
             state.id = Some(established.subscription_id);
+            state.max_interval = established.max_int;
             state.last_report = Instant::now();
             if let Some(last) = collected.events.iter().map(|e| e.number).max() {
                 state.last_event = Some(last);

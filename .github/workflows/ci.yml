@@ -9,7 +9,8 @@
 # pinned nightly (-Zbuild-std) and links against zig's musl.
 #
 # The devices are connectedhomeip's chip-all-clusters-app, then its
-# chip-ota-requestor-app for a software update, from the CSA's chip-cert-bins
+# chip-ota-requestor-app for a software update and lit-icd-app for Check-Ins,
+# from the CSA's chip-cert-bins
 # image (the apps certification testing uses), on a GitHub-hosted arm64
 # runner because the image is arm64 only.
 
@@ -76,6 +77,7 @@ jobs:
         run: |
           cargo test -p matter-bridge --test e2e --no-run
           cargo test -p matter-controller --test ota --no-run
+          cargo test -p matter-controller --test icd --no-run
       - name: Start chip-all-clusters-app
         run: |
           docker run -d --name dut --network host "${CHIP_CERT_BINS}" \
@@ -107,6 +109,22 @@ jobs:
       - name: Requestor log
         if: always()
         run: docker logs requestor 2>&1 | tail -300
+      - name: Start lit-icd-app
+        if: always()
+        run: |
+          docker rm -f requestor
+          docker run -d --name icd --network host "${CHIP_CERT_BINS}" \
+            /root/lit-icd-app --KVS /tmp/icd.kvs --icdIdleModeDuration 15 --icdActiveModeDurationMs 2000
+          sleep 3
+          docker ps -a
+      - name: A sleeping device checks in, and a request waits for it
+        if: always()
+        env:
+          RUST_LOG: info,matter_controller=debug,rs_matter_sc=debug
+        run: cargo test -p matter-controller --test icd -- --ignored --nocapture
+      - name: ICD log
+        if: always()
+        run: docker logs icd 2>&1 | tail -300
 
   ble:
     runs-on: ubuntu-latest

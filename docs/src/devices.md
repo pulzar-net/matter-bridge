@@ -19,7 +19,7 @@ any device that can be commissioned works through what it serves.
 | Thread devices already on a Thread network (added by another ecosystem) | commission over IP through the network's border router | expected |
 | New Wi-Fi devices | commission over Bluetooth LE, with Wi-Fi credentials | simulated controllers in CI |
 | New Thread devices | commission over Bluetooth LE, with the Thread dataset | up to the dataset request; no Thread device in CI |
-| Sleepy (ICD) devices | not supported | planned |
+| Sleepy (ICD) devices | commission as above; registered for Check-Ins | reference LIT ICD in CI (not yet released) |
 
 Thread devices need a Thread border router on the network (an Apple TV or
 HomePod, a Google Nest hub, a Home Assistant SkyConnect or ZBT-1 with

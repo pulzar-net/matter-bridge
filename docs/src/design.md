@@ -131,18 +131,34 @@ Anything else found while building on rs-matter joins this list.
   `ThreadNetworkDiagnostics.ExtAddress` arrives with its other attributes,
   which lets a platform place the node in the Thread mesh.
 
+## Groups, software updates, sleepy devices
+
+- **Groups.** The controller makes one group key set for its fabric and
+  gives it to each node it puts in a group: with Groupcast's `JoinGroup` on
+  Matter 1.6 nodes (with the auxiliary ACL entry that lets the group operate
+  the endpoint), or `KeySetWrite`, the group key map, an ACL entry and
+  `AddGroup` on older ones. A group command is one multicast message
+  (`Exchange::initiate_group`).
+- **OTA provider.** The controller's own node serves rs-matter's OTA Provider
+  cluster on its root endpoint, with an ACL entry letting the fabric's nodes
+  query it, and chains rs-matter's BDX handler into its responder. Images are
+  the Matter OTA files in `ota_dir`, read by header: a node is offered the
+  newest for its vendor and product that applies on top of its version, and
+  the file name is the BDX designator. `AnnounceOTAProvider` (as an urgent
+  update, since a person asked) makes a node ask at once. Images from the
+  DCL's `OtaUrl` could fill the directory later.
+- **ICD (sleepy devices).** A node whose ICD Management cluster supports
+  Check-In is registered after commissioning (`RegisterClient`, a random
+  key, the controller as check-in node and monitored subject). rs-matter's
+  secure channel hands Check-Ins to the controller, which finds the node by
+  the key that opens the message, refuses counters it has seen, renews the
+  subscription (with a maximum interval at least the node's idle interval)
+  and releases requests that waited for the node. After a restart the
+  controller waits for each sleeping node's Check-In rather than reaching
+  for it.
+
 ## Later, designed for now
 
-- **OTA provider.** rs-matter has the OTA Provider cluster and a BDX image
-  handler. The controller's node serves them; images come from the DCL's
-  `OtaUrl` or a configured directory, offered per vendor and product.
-- **Groups.** rs-matter sends groupcast (`ImClient::group_invoke_with`). The
-  controller adds group keys (`KeySetWrite`), group membership (`AddGroup`)
-  and bindings to nodes, then sends one multicast command to many.
-- **ICD (sleepy devices).** A Long Idle Time ICD reports by Check-In:
-  register with `ICDManagement::RegisterClient`, take Check-Ins through the
-  secure channel handler rs-matter routes them to, and queue writes and
-  commands for the node's next active window.
 - **The reverse: exposing devices as a Matter bridge.** rs-matter's device
   side does bridges well (the `bridge` example: an aggregator endpoint and
   bridged endpoints with Bridged Device Basic Information). A separate binary
