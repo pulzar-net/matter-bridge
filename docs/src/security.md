@@ -14,8 +14,7 @@ reported to rs-matter's own security process; we will help coordinate.
 - **Control of devices.** Whoever can publish to `matter/#` can control
   them, commission new ones, and open commissioning windows that hand a
   device to another controller.
-- **Network credentials** given to devices during Bluetooth commissioning
-  (not in 0.1.0).
+- **Network credentials** given to devices during Bluetooth commissioning.
 
 ## Threats and defenses
 

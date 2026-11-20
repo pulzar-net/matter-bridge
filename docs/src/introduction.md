@@ -32,8 +32,7 @@ cover every type and function.
 matter-bridge is at 0.x. CI commissions and controls connectedhomeip's
 reference device on every commit, but **it has not been tested with
 commercial devices yet**, and **it does not verify device attestation yet**:
-only commission devices you trust. Features on `main` and not yet in a
-release are marked "not in 0.1.0".
+only commission devices you trust.
 
 Matter is a trademark of the Connectivity Standards Alliance. This project
 is not affiliated with or certified by the CSA.

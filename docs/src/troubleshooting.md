@@ -12,7 +12,7 @@ network:
   code from its current app; a new device is usually in pairing mode for a
   limited time after power-on.
 - Is the device on IP at all? A new Wi-Fi or Thread device is not: it needs
-  Bluetooth commissioning (next release).
+  Bluetooth commissioning.
 - Is the bridge on the same network and VLAN, with IPv6? Set
   `matter.interface` if the host has several interfaces. `discover` lists
   what the bridge sees.

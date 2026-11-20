@@ -45,10 +45,11 @@ Expect rough edges and breaking changes between 0.x releases.
 | A subscription to every device, renewed when it lapses | done in 0.1.0 |
 | Multi-admin: open a commissioning window for another ecosystem | done in 0.1.0 |
 | Home Assistant MQTT discovery for lights, switches, sensors | done in 0.1.0 |
-| Commissioning over Bluetooth LE | on `main`, next release |
-| Giving Wi-Fi and Thread credentials to a device being commissioned | on `main`, next release |
+| Commissioning over Bluetooth LE, giving the device Wi-Fi credentials | done in 0.1.0, tested on simulated controllers only |
+| Giving a Thread device the border router's dataset | done in 0.1.0, untested with a real Thread device |
 | Device attestation verification | in progress (blocks production use) |
-| More than 64 live nodes; a CA whose key is held elsewhere | in progress |
+| An intermediate CA under a root held elsewhere | done in 0.1.0 |
+| More than 64 live nodes | in progress |
 | OTA, groups, sleepy (ICD) devices | planned |
 | Exposing other devices as a Matter bridge | planned |
 
@@ -63,7 +64,7 @@ bridge is on works through the clusters it serves.
 | connectedhomeip's `chip-all-clusters-app` (reference device) | commission over IP | tested in CI on every commit |
 | Matter devices on Ethernet, or already on your Wi-Fi or Thread network | commission over IP with their pairing code | expected |
 | Devices already in Apple Home, Google Home, Home Assistant or another ecosystem | ask that app for a pairing code ("share" or "turn on pairing mode"), then commission over IP | expected |
-| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE | next release |
+| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE, with the network's credentials | expected (simulator-tested) |
 
 Home Assistant discovery covers lights (On/Off, with brightness from Level
 Control), switches and plugs, temperature, humidity, pressure and
@@ -155,7 +156,7 @@ The bridge reads one TOML file, `/etc/matter-bridge/config.toml` by default
 |---|---|
 | `[mqtt]` | broker, credentials (password from a file), client id, base topic |
 | `[homeassistant]` | discovery on or off, discovery prefix, Home Assistant's status topic |
-| `[matter]` | UDP port, mDNS interface, fabric id, vendor id, subscription renewal, discovery timeout; on `main`, the Bluetooth controller and a Thread dataset source |
+| `[matter]` | UDP port, mDNS interface, fabric id, vendor id, subscription renewal, discovery timeout; the Bluetooth controller and a Thread dataset source |
 | `[data]` | the data directory: the fabric's CA, the controller's identity, the node store |
 
 Unknown keys are an error, so a typo stops the bridge at startup. Every key,
@@ -255,7 +256,7 @@ explains the layers, the fabric and its CA, and the design rules (no
 |---|---|---|---|
 | Language and runtime | Rust, one static binary | Python, on connectedhomeip's SDK | TypeScript, Node.js |
 | Interface | MQTT and Home Assistant MQTT discovery | Home Assistant's Matter integration (WebSocket) | a library, and a controller and device toolkit |
-| Commissioning | over IP; Bluetooth next release | Bluetooth (through the Home Assistant app) and IP | Bluetooth and IP |
+| Commissioning | Bluetooth and IP | Bluetooth (through the Home Assistant app) and IP | Bluetooth and IP |
 | Small hardware | runs on 128 MB MIPS routers | needs a host for the SDK | needs a Node.js capable host |
 | Maturity | 0.x | mature, very widely used | mature, widely used |
 
@@ -268,10 +269,9 @@ can accept 0.x maturity and, for now, unverified attestation.
 
 ## Roadmap
 
-- **Next release:** commissioning over Bluetooth LE, and handing Wi-Fi and
-  Thread credentials to devices being commissioned (done on `main`).
+- **Next:** testing Bluetooth and Thread commissioning on real devices.
 - **In progress:** device attestation verification, more than 64 live
-  nodes, a CA whose key lives elsewhere (an HSM, a platform service).
+  nodes.
 - **Later:** OTA, groups, sleepy (ICD) devices, exposing other devices as a
   Matter bridge.
 

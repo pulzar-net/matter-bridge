@@ -129,7 +129,7 @@ Every request takes an optional `transaction`, copied into the response.
 
 | Request | Fields | Data |
 |---|---|---|
-| `commission` | `code`, optional `name`, `address`, `timeout`; not in 0.1.0: `wifi` (`ssid`, `password`), `thread_dataset`, `thread_dataset_url` | the node |
+| `commission` | `code`, optional `name`, `address`, `timeout`; for Bluetooth: `wifi` (`ssid`, `password`), `thread_dataset`, `thread_dataset_url` | the node |
 | `open_commissioning_window` | `device`, optional `timeout` (180 to 900 s, default 300) | `node`, `manual_code`, `qr_code`, `discriminator`, `timeout` |
 | `read` | `device`, optional `endpoint`, `cluster`, `attribute` (any left out: all of them) | a list of `endpoint`, `cluster`, `attribute`, `value`, `status` |
 | `write` | `device`, `endpoint`, `cluster`, `attribute`, `value`, optional `timed` (ms) | `null` |

@@ -43,7 +43,7 @@ commissioning with the README's own commands.
 ## Bluetooth commissioning
 
 `crates/matter-controller/tests/ble.rs` commissions over Bluetooth LE
-between two virtual controllers from Bumble (not in 0.1.0).
+between two virtual controllers from Bumble.
 
 ## Fuzzing
 

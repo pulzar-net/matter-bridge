@@ -38,7 +38,7 @@ cargo install --locked --git https://github.com/pulzar-net/matter-bridge matter-
 
 Or from a clone, `cargo build --release -p matter-bridge`. No system
 packages are required. Bluetooth commissioning (feature `ble`, on by
-default, not in 0.1.0) is built in; `--no-default-features` leaves it out.
+default) is built in; `--no-default-features` leaves it out.
 
 ## Network requirements
 
@@ -68,7 +68,7 @@ sudo systemctl enable --now matter-bridge
 journalctl -u matter-bridge -f
 ```
 
-For Bluetooth commissioning (not in 0.1.0), the unit needs
+For Bluetooth commissioning, the unit needs
 `CAP_NET_ADMIN` and `AF_BLUETOOTH`; the commented lines in it show how.
 
 ## On OpenWrt

@@ -12,13 +12,13 @@ any device that can be commissioned works through what it serves.
 
 ## What the bridge can reach
 
-| Device | In 0.1.0 | Next release |
+| Device | How | Tested |
 |---|---|---|
-| Ethernet devices | commission over IP | |
-| Wi-Fi devices already on your Wi-Fi (added by another ecosystem) | commission over IP with a code from that ecosystem | |
-| Thread devices already on a Thread network (added by another ecosystem) | commission over IP through the network's border router | |
-| New Wi-Fi devices | | commission over Bluetooth LE, with Wi-Fi credentials |
-| New Thread devices | | commission over Bluetooth LE, with the Thread dataset |
+| Ethernet devices | commission over IP | reference device in CI |
+| Wi-Fi devices already on your Wi-Fi (added by another ecosystem) | commission over IP with a code from that ecosystem | expected |
+| Thread devices already on a Thread network (added by another ecosystem) | commission over IP through the network's border router | expected |
+| New Wi-Fi devices | commission over Bluetooth LE, with Wi-Fi credentials | simulated controllers only |
+| New Thread devices | commission over Bluetooth LE, with the Thread dataset | not yet with a real Thread device |
 | Sleepy (ICD) devices | not supported | planned |
 
 Thread devices need a Thread border router on the network (an Apple TV or

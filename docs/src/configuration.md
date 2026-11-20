@@ -27,7 +27,7 @@ complete and check the file. Point it at the schema with a first line of:
 |---|---|
 | `[mqtt]` | broker host and port, user name, password file, client id, base topic, keep-alive |
 | `[homeassistant]` | discovery on or off, the discovery prefix, Home Assistant's status topic |
-| `[matter]` | the UDP port, the mDNS interface, the fabric id of a new fabric, the vendor id, attestation policy, subscription renewal, the discovery timeout; not in 0.1.0: the Bluetooth controller and a Thread dataset source |
+| `[matter]` | the UDP port, the mDNS interface, the fabric id of a new fabric, the vendor id, attestation policy, subscription renewal, the discovery timeout; the Bluetooth controller and a Thread dataset source |
 | `[data]` | the data directory |
 
 ## A complete example

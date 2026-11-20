@@ -7,7 +7,7 @@ A Matter controller on rs-matter. [API docs](https://pulzar-net.github.io/matter
 - **Onboarding**: `Onboarding::parse` reads QR codes and manual codes.
 - **Discovery** of commissionable devices by DNS-SD, and of operational
   nodes.
-- **Commissioning** over IP (and, not in 0.1.0, over Bluetooth LE with
+- **Commissioning** over IP and over Bluetooth LE (with
   network credentials), on rs-matter's commissioner.
 - **A fabric of its own**, rooted in a `CertificateAuthority`: `FileCa`
   keeps the CA in the state directory; implement the trait to hold the root
