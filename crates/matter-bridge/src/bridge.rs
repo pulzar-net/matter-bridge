@@ -6,10 +6,12 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 
-use matter_controller::{AttributePath, CommissionRequest, Controller, Event, Node};
+use matter_controller::{
+    AttributePath, CommissionRequest, Controller, Event, Networks, Node, WiFi,
+};
 use serde_json::{json, Value};
 
-use crate::config::Config;
+use crate::config::{Config, MatterConfig};
 use crate::homeassistant::Discovery;
 use crate::mqtt::{self, Incoming, Mqtt};
 use crate::topics;
@@ -324,7 +326,7 @@ impl Bridge {
         let mqtt = self.mqtt.clone();
         let names = self.names.clone();
         let base = self.base().to_string();
-        let discovery_timeout = self.config.matter.discovery_timeout;
+        let matter = self.config.matter.clone();
         tokio::spawn(async move {
             let body: Value = if payload.is_empty() {
                 json!({})
@@ -332,7 +334,7 @@ impl Bridge {
                 serde_json::from_slice(&payload).unwrap_or(Value::Null)
             };
             let transaction = body.get("transaction").cloned();
-            let result = request(&controller, &names, &name, &body, discovery_timeout).await;
+            let result = request(&controller, &names, &name, &body, &matter).await;
             let mut response = match result {
                 Ok(data) => json!({"status": "ok", "data": data}),
                 Err(error) => {
@@ -372,6 +374,66 @@ impl Bridge {
             }
         });
     }
+}
+
+/// The networks a device commissioned over Bluetooth may join: a Thread
+/// dataset (`thread_dataset` as hex, or fetched from `thread_dataset_url` or
+/// the configured border router at commissioning time) and Wi-Fi
+/// (`wifi: {ssid, password}`). Neither is kept or logged.
+async fn networks_of(body: &Value, matter: &MatterConfig) -> Result<Networks, String> {
+    let thread_dataset = match body.get("thread_dataset").and_then(Value::as_str) {
+        Some(hex) => Some(hex.to_string()),
+        None => {
+            let url = body
+                .get("thread_dataset_url")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| matter.thread_dataset_url.clone());
+            match url {
+                Some(url) => Some(fetch_dataset(url).await?),
+                None => None,
+            }
+        }
+    };
+    let thread_dataset = thread_dataset
+        .map(|hex| matter_controller::network::parse_thread_dataset_hex(&hex))
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let wifi = match body.get("wifi") {
+        Some(w) => Some(WiFi {
+            ssid: w
+                .get("ssid")
+                .and_then(Value::as_str)
+                .ok_or("`wifi.ssid` is required")?
+                .as_bytes()
+                .to_vec(),
+            credentials: w
+                .get("password")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .as_bytes()
+                .to_vec(),
+        }),
+        None => None,
+    };
+    Ok(Networks {
+        thread_dataset,
+        wifi,
+    })
+}
+
+/// A Thread border router's active dataset, from its REST API (OpenThread's
+/// `GET /node/dataset/active` with `Accept: text/plain` gives it as hex).
+async fn fetch_dataset(url: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        ureq::get(&url)
+            .header("Accept", "text/plain")
+            .call()
+            .and_then(|mut r| r.body_mut().read_to_string())
+            .map_err(|e| format!("the Thread dataset from {url}: {e}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn node_of(names: &RwLock<Names>, body: &Value) -> Result<u64, String> {
@@ -425,7 +487,7 @@ async fn request(
     names: &RwLock<Names>,
     name: &str,
     body: &Value,
-    discovery_timeout: u16,
+    matter: &MatterConfig,
 ) -> Result<Value, String> {
     let e = |e: matter_controller::Error| e.to_string();
     match name {
@@ -452,13 +514,15 @@ async fn request(
                 .get("timeout")
                 .and_then(Value::as_u64)
                 .and_then(|t| u16::try_from(t).ok())
-                .unwrap_or(discovery_timeout);
+                .unwrap_or(matter.discovery_timeout);
+            let networks = networks_of(body, matter).await?;
             let node = controller
                 .commission(CommissionRequest {
                     code: code.to_string(),
                     address,
                     name: req_name,
                     discovery_timeout: timeout,
+                    networks,
                 })
                 .await
                 .map_err(e)?;

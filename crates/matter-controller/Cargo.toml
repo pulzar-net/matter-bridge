@@ -10,7 +10,13 @@ authors.workspace = true
 keywords = ["matter", "controller", "commissioning", "smart-home"]
 categories = ["network-programming"]
 
+[features]
+default = ["ble"]
+# Commissioning over Bluetooth LE, with bluetooth-bridge's host stack.
+ble = ["dep:bluetooth-host"]
+
 [dependencies]
+bluetooth-host = { git = "https://github.com/pulzar-net/bluetooth-bridge", tag = "v0.1.0", default-features = false, optional = true }
 matter-model.workspace = true
 rs-matter.workspace = true
 async-io.workspace = true

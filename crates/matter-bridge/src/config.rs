@@ -106,6 +106,13 @@ pub struct MatterConfig {
     pub max_report_interval: u16,
     /// How long to look for a device to commission, seconds.
     pub discovery_timeout: u16,
+    /// The Bluetooth controller for commissioning over BLE: `hci0` (the
+    /// Linux HCI user channel; BlueZ must not hold it) or `tcp:host:port`.
+    pub bluetooth: Option<String>,
+    /// Where to read the Thread network's dataset for a Thread device: an
+    /// OpenThread border router's REST API, e.g.
+    /// `http://127.0.0.1:8081/node/dataset/active`.
+    pub thread_dataset_url: Option<String>,
 }
 
 impl Default for MatterConfig {
@@ -119,6 +126,8 @@ impl Default for MatterConfig {
             allow_unverified_attestation: c.allow_unverified_attestation,
             max_report_interval: c.max_report_interval,
             discovery_timeout: 30,
+            bluetooth: None,
+            thread_dataset_url: None,
         }
     }
 }
@@ -150,6 +159,7 @@ impl Config {
         c.vendor_id = self.matter.vendor_id;
         c.allow_unverified_attestation = self.matter.allow_unverified_attestation;
         c.max_report_interval = self.matter.max_report_interval;
+        c.bluetooth = self.matter.bluetooth.clone();
         c
     }
 }

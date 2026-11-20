@@ -32,6 +32,12 @@ allow_unverified_attestation = true
 max_report_interval = 60
 # How long to look for a device to commission, seconds.
 discovery_timeout = 30
+# Bluetooth controller for commissioning devices over BLE: "hci0" (Linux HCI
+# user channel; stop BlueZ on it first) or "tcp:host:port" (H4 over TCP).
+# bluetooth = "hci0"
+# A Thread border router's active dataset, for Thread devices (read when a
+# device is commissioned; never stored).
+# thread_dataset_url = "http://127.0.0.1:8081/node/dataset/active"
 
 [data]
 # The fabric (CA keys), the controller's identity and the node store. Keep it

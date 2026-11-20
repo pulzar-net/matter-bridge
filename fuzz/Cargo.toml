@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 matter-model = { path = "../crates/matter-model" }
-matter-controller = { path = "../crates/matter-controller" }
+matter-controller = { path = "../crates/matter-controller", default-features = false }
 rs-matter-tlv = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
 serde_json = "1"
 
@@ -30,3 +30,10 @@ bench = false
 
 [profile.release]
 debug = 1
+
+[[bin]]
+name = "thread_dataset"
+path = "fuzz_targets/thread_dataset.rs"
+test = false
+doc = false
+bench = false

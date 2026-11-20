@@ -338,6 +338,7 @@ async fn commissions_a_device_and_bridges_it() {
             address: None,
             name: Some("dut".into()),
             discovery_timeout: 60,
+            networks: Default::default(),
         })
         .await
         .expect("the second admin commissions through the window");

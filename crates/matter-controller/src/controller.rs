@@ -43,6 +43,16 @@ use tokio::sync::{mpsc, oneshot};
 use crate::ca::{CertificateAuthority, FileCa};
 use crate::identity::Identity;
 use crate::onboarding::Onboarding;
+
+#[cfg(feature = "ble")]
+use crate::ble::Link;
+/// Without Bluetooth there is never a link to close.
+#[cfg(not(feature = "ble"))]
+enum Link {}
+#[cfg(not(feature = "ble"))]
+impl Link {
+    async fn close(self) {}
+}
 use crate::reports::{items, Collected};
 use crate::store::{BasicInfo, DeviceType, Endpoint, Node, NodeStore};
 use crate::{
@@ -55,6 +65,10 @@ const DESCRIPTOR: u32 = 0x001D;
 const BASIC_INFORMATION: u32 = 0x0028;
 const OPERATIONAL_CREDENTIALS: u32 = 0x003E;
 const ADMINISTRATOR_COMMISSIONING: u32 = 0x003C;
+const NETWORK_COMMISSIONING: u32 = 0x0031;
+const ADD_WIFI_NETWORK: u32 = 0x02;
+const ADD_THREAD_NETWORK: u32 = 0x03;
+const CONNECT_NETWORK: u32 = 0x06;
 /// The timed-interaction timeout for commands and writes that need one.
 const TIMED_MS: u16 = 10_000;
 /// The largest request payload we encode.
@@ -121,7 +135,7 @@ impl Controller {
             .name("matter".into())
             .spawn(move || {
                 let rt = match tokio::runtime::Builder::new_current_thread()
-                    .enable_time()
+                    .enable_all()
                     .build()
                 {
                     Ok(rt) => rt,
@@ -297,6 +311,8 @@ struct Ctx<C: 'static> {
     subs: Rc<Subscriptions>,
     tasks: RefCell<HashMap<u64, tokio::task::JoinHandle<()>>>,
     commissioning: tokio::sync::Mutex<()>,
+    #[cfg(feature = "ble")]
+    ble: Option<crate::ble::Ble>,
 }
 
 /// The subscriptions we hold, by node: which subscription id is current and
@@ -386,6 +402,24 @@ async fn run(
         config.port,
     )))?;
 
+    // BTP, for commissioning over Bluetooth: rs-matter's transport sends
+    // `Address::Btp` packets through it, everything else over UDP.
+    #[cfg(feature = "ble")]
+    let btp: &'static rs_matter::transport::network::btp::Btp =
+        Box::leak(Box::<rs_matter::transport::network::btp::Btp>::new_uninit())
+            .init_with(rs_matter::transport::network::btp::Btp::init());
+    #[cfg(feature = "ble")]
+    let ble = match &config.bluetooth {
+        Some(spec) => Some(crate::ble::Ble::open(spec, btp).await?),
+        None => None,
+    };
+    #[cfg(not(feature = "ble"))]
+    if config.bluetooth.is_some() {
+        return Err(Error::Unsupported(
+            "Bluetooth: this build has no `ble` feature".into(),
+        ));
+    }
+
     let subs = Rc::new(Subscriptions::default());
 
     // The controller's own data model serves no clusters; its interaction
@@ -420,6 +454,8 @@ async fn run(
         subs,
         tasks: RefCell::new(HashMap::new()),
         commissioning: tokio::sync::Mutex::new(()),
+        #[cfg(feature = "ble")]
+        ble,
     });
 
     let _ = ready.send(Ok(info));
@@ -439,10 +475,42 @@ async fn run(
     let mdns = crate::mdns::run(matter, crypto, config.interface.as_deref());
 
     tokio::select! {
-        r = matter.run(crypto, &socket, &socket, NoNetwork) => r.map_err(Error::from),
+        r = run_transport(
+            matter,
+            crypto,
+            &socket,
+            #[cfg(feature = "ble")]
+            btp,
+        ) => r,
         r = mdns => r,
         r = responder.run::<4>() => r.map_err(Error::from),
         () = serve => Ok(()),
+    }
+}
+
+/// Run Matter's transport: UDP, and BTP for commissioning over Bluetooth.
+async fn run_transport<C: Crypto>(
+    matter: &Matter<'_>,
+    crypto: C,
+    socket: &async_io::Async<UdpSocket>,
+    #[cfg(feature = "ble")] btp: &rs_matter::transport::network::btp::Btp,
+) -> Result<(), Error> {
+    #[cfg(feature = "ble")]
+    {
+        use rs_matter::transport::network::ChainedNetwork;
+        let mut send = ChainedNetwork::new(|a: &Address| a.is_btp(), btp, socket);
+        let mut recv = ChainedNetwork::new(|a: &Address| a.is_btp(), btp, socket);
+        matter
+            .run(crypto, &mut send, &mut recv, NoNetwork)
+            .await
+            .map_err(Error::from)
+    }
+    #[cfg(not(feature = "ble"))]
+    {
+        matter
+            .run(crypto, socket, socket, NoNetwork)
+            .await
+            .map_err(Error::from)
     }
 }
 
@@ -512,6 +580,15 @@ fn now_secs() -> u64 {
 struct Hooks<'a> {
     node: u64,
     events: &'a EventBus,
+}
+
+impl Hooks<'_> {
+    fn emit(&self, step: CommissionStep) {
+        self.events.send(Event::Commissioning {
+            node: self.node,
+            step,
+        });
+    }
 }
 
 impl CommissionHooks for Hooks<'_> {
@@ -600,9 +677,9 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             step: CommissionStep::Discovery,
         });
 
-        let address = match req.address {
-            Some(addr) => Address::Udp(addr),
-            None => self.find(&onboarding, req.discovery_timeout).await?,
+        let (address, link) = match req.address {
+            Some(addr) => (Address::Udp(addr), None),
+            None => self.locate(&onboarding, req.discovery_timeout).await?,
         };
         log::info!("commissioning {address:?} as node {node_id:016X}");
 
@@ -632,20 +709,40 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         }
         let opts = CommissionOptions {
             allow_test_attestation: self.config.allow_unverified_attestation,
-            ..CommissionOptions::default()
+            // Joining a Thread or Wi-Fi network takes a while inside the
+            // fail-safe.
+            fail_safe_secs: if address.is_btp() { 180 } else { 60 },
         };
 
-        let phase1 = commissioner
-            .commission(
-                address,
-                onboarding.passcode,
-                &opts,
-                node_id,
-                VALID_FOREVER,
-                &hooks,
-            )
-            .await?;
-        commissioner.complete_via_case(&phase1, &hooks).await?;
+        let commissioned = async {
+            let phase1 = commissioner
+                .commission(
+                    address,
+                    onboarding.passcode,
+                    &opts,
+                    node_id,
+                    VALID_FOREVER,
+                    &hooks,
+                )
+                .await?;
+            // Over Bluetooth the device is not on an operational network
+            // yet: it gets one before CASE, which runs over IP.
+            if address.is_btp() {
+                let pase = phase1.pase_session_id;
+                if let Err(e) = self.network_commission(pase, &req.networks, &hooks).await {
+                    let _ = commissioner.disarm_fail_safe(pase).await;
+                    commissioner.end_pase(pase);
+                    return Err(e);
+                }
+            }
+            commissioner.complete_via_case(&phase1, &hooks).await?;
+            Ok::<_, Error>(())
+        }
+        .await;
+        if let Some(link) = link {
+            link.close().await;
+        }
+        commissioned?;
 
         let name = {
             let store = self.store.borrow();
@@ -678,6 +775,141 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         };
         self.start_subscription(node_id);
         Ok(node)
+    }
+
+    /// Give a device being commissioned over Bluetooth its operational
+    /// network, over the PASE session and inside the fail-safe: the kind its
+    /// Network Commissioning cluster supports (Thread or Wi-Fi), added, then
+    /// connected. An Ethernet device needs nothing.
+    #[cfg_attr(not(feature = "ble"), allow(dead_code))]
+    async fn network_commission(
+        &self,
+        pase_session: u32,
+        networks: &crate::Networks,
+        hooks: &Hooks<'_>,
+    ) -> Result<(), Error> {
+        const WIFI: u64 = 1 << 0;
+        const THREAD: u64 = 1 << 1;
+        const ETHERNET: u64 = 1 << 2;
+
+        let pase_exchange =
+            || Exchange::initiate_for_session(self.matter.transport(), self.crypto, pase_session);
+
+        hooks.emit(CommissionStep::NetworkSetup);
+        let features = self
+            .read_on(
+                pase_exchange()?,
+                AttributePath {
+                    endpoint: Some(ROOT_ENDPOINT),
+                    cluster: Some(NETWORK_COMMISSIONING),
+                    attribute: Some(0xFFFC), // FeatureMap
+                },
+            )
+            .await?
+            .first()
+            .and_then(|a| a.value.as_u64())
+            .ok_or_else(|| {
+                Error::Invalid("the device has no Network Commissioning cluster".into())
+            })?;
+
+        let (add, add_fields, network_id) = if features & THREAD != 0 {
+            let dataset = networks.thread_dataset.as_ref().ok_or_else(|| {
+                Error::Invalid("the device joins a Thread network: give a Thread dataset".into())
+            })?;
+            let ext_pan_id = crate::network::thread_extended_pan_id(dataset)?;
+            log::info!(
+                "giving the device Thread network {}",
+                hex::encode(ext_pan_id)
+            );
+            (
+                ADD_THREAD_NETWORK,
+                json!({ "0": hex::encode(dataset), "1": 1 }),
+                ext_pan_id.to_vec(),
+            )
+        } else if features & WIFI != 0 {
+            let wifi = networks.wifi.as_ref().ok_or_else(|| {
+                Error::Invalid(
+                    "the device joins a Wi-Fi network: give its SSID and passphrase".into(),
+                )
+            })?;
+            log::info!(
+                "giving the device Wi-Fi network {}",
+                String::from_utf8_lossy(&wifi.ssid)
+            );
+            (
+                ADD_WIFI_NETWORK,
+                json!({ "0": hex::encode(&wifi.ssid), "1": hex::encode(&wifi.credentials), "2": 1 }),
+                wifi.ssid.clone(),
+            )
+        } else if features & ETHERNET != 0 {
+            return Ok(());
+        } else {
+            return Err(Error::Invalid(format!(
+                "the device's network interface is not one this controller knows (features {features:#x})"
+            )));
+        };
+
+        let response = self
+            .invoke_on(
+                pase_exchange()?,
+                ROOT_ENDPOINT,
+                NETWORK_COMMISSIONING,
+                add,
+                &add_fields,
+                None,
+            )
+            .await?;
+        networking_status("adding the network", &response)?;
+
+        hooks.emit(CommissionStep::NetworkConnect);
+        let response = self
+            .invoke_on(
+                pase_exchange()?,
+                ROOT_ENDPOINT,
+                NETWORK_COMMISSIONING,
+                CONNECT_NETWORK,
+                &json!({ "0": hex::encode(network_id), "1": 2 }),
+                None,
+            )
+            .await?;
+        networking_status("connecting to the network", &response)
+    }
+
+    /// Find a device to commission: on the IP network by DNS-SD, or over
+    /// Bluetooth LE when the controller has Bluetooth, as its onboarding
+    /// payload says it can be found (a manual code does not say: IP first,
+    /// then Bluetooth).
+    async fn locate(
+        &self,
+        onboarding: &Onboarding,
+        timeout: u16,
+    ) -> Result<(Address, Option<Link>), Error> {
+        let caps = onboarding.capabilities;
+        let try_ip = caps.is_none_or(|c| c.on_network);
+        #[cfg(feature = "ble")]
+        if let Some(ble) = &self.ble {
+            let try_ble = caps.is_none_or(|c| c.ble);
+            if try_ble {
+                let total = Duration::from_secs(timeout.max(2).into());
+                if try_ip {
+                    let ip_secs = (timeout / 2).clamp(1, 10);
+                    if let Ok(address) = self.find(onboarding, ip_secs).await {
+                        return Ok((address, None));
+                    }
+                }
+                let peer = ble.find(&onboarding.filter(), total).await?;
+                let (addr, link) = ble.connect(peer).await?;
+                log::info!("reached the device over Bluetooth ({addr})");
+                return Ok((Address::Btp(addr), Some(link)));
+            }
+        }
+        if !try_ip {
+            return Err(Error::Unsupported(
+                "the device can only be found over Bluetooth, which this controller has not got"
+                    .into(),
+            ));
+        }
+        Ok((self.find(onboarding, timeout).await?, None))
     }
 
     /// Find the commissionable node an onboarding payload describes.
@@ -747,18 +979,32 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
 
     async fn read(&self, node: u64, path: AttributePath) -> Result<Vec<AttributeValue>, Error> {
         self.known(node)?;
+        let exchange = self.exchange(node).await?;
+        let mut values = self.read_on(exchange, path).await?;
+        for v in &mut values {
+            v.node = node;
+        }
+        Ok(values)
+    }
+
+    /// Read on an exchange already set up (over CASE, or PASE while
+    /// commissioning). Values carry node 0; the caller sets it.
+    async fn read_on(
+        &self,
+        exchange: Exchange<'static>,
+        path: AttributePath,
+    ) -> Result<Vec<AttributeValue>, Error> {
         let paths = [AttrPath::from_gp(&GenericPath::new(
             path.endpoint,
             path.cluster,
             path.attribute,
         ))];
-        let exchange = self.exchange(node).await?;
         let mut chunk = exchange
             .read_with(|b| b.attr_requests_from(&paths)?.fabric_filtered(true)?.end())
             .await?;
         let mut collected = Collected::default();
         loop {
-            collected.add_chunk(node, &chunk.response()?);
+            collected.add_chunk(0, &chunk.response()?);
             match chunk.complete().await? {
                 Some(next) => chunk = next,
                 None => break,
@@ -824,6 +1070,22 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         timed: Option<u16>,
     ) -> Result<Value, Error> {
         self.known(node)?;
+        let exchange = self.exchange(node).await?;
+        self.invoke_on(exchange, endpoint, cluster, command, fields, timed)
+            .await
+    }
+
+    /// Invoke a command on an exchange already set up (over CASE to a node,
+    /// or over the PASE session of a commissioning).
+    async fn invoke_on(
+        &self,
+        exchange: Exchange<'static>,
+        endpoint: u16,
+        cluster: u32,
+        command: u32,
+        fields: &Value,
+        timed: Option<u16>,
+    ) -> Result<Value, Error> {
         let model = matter_model::cluster(cluster);
         let cmd = model.and_then(|c| c.command(command));
         let shape = match cmd {
@@ -838,7 +1100,6 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         let data = encode_to_vec(shape, &fields, MAX_PAYLOAD)?;
         let timed = timed.or(cmd.filter(|c| c.timed).map(|_| TIMED_MS));
 
-        let exchange = self.exchange(node).await?;
         let mut chunk = exchange
             // A request after a Timed Request says so itself, or the node
             // refuses it (TIMED_REQUEST_MISMATCH); rs-matter's client
@@ -1216,6 +1477,36 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         }
         publish(&self.events, collected);
         Ok(established.max_int)
+    }
+}
+
+/// Check a `NetworkConfigResponse` or `ConnectNetworkResponse`: its
+/// `networkingStatus` (field 0) is 0 on success.
+fn networking_status(doing: &str, response: &Value) -> Result<(), Error> {
+    let status = response
+        .get("networkingStatus")
+        .or_else(|| response.get("0"))
+        .and_then(Value::as_u64);
+    match status {
+        Some(0) => Ok(()),
+        Some(code) => {
+            let name = matter_model::cluster(NETWORK_COMMISSIONING)
+                .and_then(|c| c.response(0x05))
+                .and_then(|s| s.field(0))
+                .and_then(|f| match f.ty {
+                    matter_model::Type::Enum(e) => e.name_of(code),
+                    _ => None,
+                })
+                .unwrap_or("unknown");
+            let debug = response
+                .get("debugText")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            Err(Error::Status(format!("{doing}: {name} ({code}) {debug}")))
+        }
+        None => Err(Error::Status(format!(
+            "{doing}: no networking status in {response}"
+        ))),
     }
 }
 

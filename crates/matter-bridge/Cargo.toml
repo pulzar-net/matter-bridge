@@ -10,6 +10,11 @@ authors.workspace = true
 keywords = ["matter", "mqtt", "home-assistant", "controller"]
 categories = ["command-line-utilities", "network-programming"]
 
+[features]
+default = ["ble"]
+# Commissioning over Bluetooth LE.
+ble = ["matter-controller/ble"]
+
 [[bin]]
 name = "matter-bridge"
 path = "src/main.rs"
@@ -18,6 +23,7 @@ path = "src/main.rs"
 matter-controller.workspace = true
 matter-model.workspace = true
 lexopt = "0.3"
+ureq = { version = "3", default-features = false }
 rumqttc = { version = "0.25", default-features = false }
 serde.workspace = true
 serde_json.workspace = true

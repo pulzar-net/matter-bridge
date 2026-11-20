@@ -17,7 +17,7 @@ authors = ["Pulzar LLC"]
 
 [workspace.dependencies]
 matter-model = { path = "crates/matter-model", version = "0.1.0" }
-matter-controller = { path = "crates/matter-controller", version = "0.1.0" }
+matter-controller = { path = "crates/matter-controller", version = "0.1.0", default-features = false }
 
 # rs-matter is used from a pinned commit of its main branch: the controller
 # side (commissioner, IM client, mDNS browse) is newer than its last release.

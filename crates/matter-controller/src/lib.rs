@@ -20,11 +20,14 @@
 
 #![allow(async_fn_in_trait)]
 
+#[cfg(feature = "ble")]
+mod ble;
 pub mod ca;
 mod controller;
 mod fsutil;
 mod identity;
 mod mdns;
+pub mod network;
 pub mod onboarding;
 mod reports;
 pub mod store;
@@ -78,6 +81,9 @@ pub enum Error {
     /// Not supported (yet).
     #[error("not supported: {0}")]
     Unsupported(String),
+    /// Bluetooth failed.
+    #[error("bluetooth: {0}")]
+    Bluetooth(String),
     /// The controller has stopped.
     #[error("the controller has stopped")]
     Stopped,
@@ -116,6 +122,10 @@ pub struct Config {
     /// `docs/design.md`), so commissioning refuses every device unless this is
     /// set.
     pub allow_unverified_attestation: bool,
+    /// The Bluetooth controller for commissioning over BLE: `hci0` (the Linux
+    /// HCI user channel; BlueZ must not be using it) or `tcp:host:port` (H4
+    /// over TCP). Needs the `ble` feature.
+    pub bluetooth: Option<String>,
     /// The longest a subscription may stay silent before it is renewed,
     /// seconds (the device may agree to less).
     pub max_report_interval: u16,
@@ -131,6 +141,7 @@ impl Config {
             fabric_id: None,
             vendor_id: 0xFFF1,
             allow_unverified_attestation: true,
+            bluetooth: None,
             max_report_interval: 60,
         }
     }
@@ -147,6 +158,45 @@ pub struct CommissionRequest {
     pub name: Option<String>,
     /// How long to look for the device, seconds.
     pub discovery_timeout: u16,
+    /// The networks a device commissioned over Bluetooth may be given; the
+    /// device's Network Commissioning cluster says which kind it takes.
+    pub networks: Networks,
+}
+
+/// Operational networks for devices being commissioned over Bluetooth.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Networks {
+    /// A Thread network's active operational dataset, as TLVs (what a
+    /// border router's `dataset active -x` prints).
+    pub thread_dataset: Option<Vec<u8>>,
+    /// A Wi-Fi network.
+    pub wifi: Option<WiFi>,
+}
+
+/// A Wi-Fi network.
+#[derive(Clone, PartialEq, Eq)]
+pub struct WiFi {
+    /// SSID.
+    pub ssid: Vec<u8>,
+    /// Passphrase or PSK (empty for an open network).
+    pub credentials: Vec<u8>,
+}
+
+// The credentials are secrets: never in a log.
+impl std::fmt::Debug for Networks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let thread = self.thread_dataset.as_deref().map(|d| {
+            network::thread_extended_pan_id(d).map_or_else(|_| "invalid".to_string(), hex::encode)
+        });
+        let ssid = self
+            .wifi
+            .as_ref()
+            .map(|w| String::from_utf8_lossy(&w.ssid).into_owned());
+        f.debug_struct("Networks")
+            .field("thread_extended_pan_id", &thread)
+            .field("wifi_ssid", &ssid)
+            .finish()
+    }
 }
 
 /// A path to one attribute or a wildcard over several.
@@ -216,6 +266,10 @@ pub enum CommissionStep {
     AddNoc,
     /// Finding it on the operational network.
     FindOperational,
+    /// Giving the device its Thread or Wi-Fi network.
+    NetworkSetup,
+    /// The device joining that network.
+    NetworkConnect,
     /// Completing commissioning over CASE.
     CommissioningComplete,
     /// Rolling back after a failure.

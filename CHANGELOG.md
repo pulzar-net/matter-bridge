@@ -5,6 +5,19 @@ All notable changes are listed here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- Commissioning over Bluetooth LE (feature `ble`, on by default), with
+  bluetooth-bridge's `bluetooth-host` as the GATT central under rs-matter's
+  BTP: `bluetooth = "hci0"` or `"tcp:host:port"`. Not yet exercised end to end
+  in CI.
+- Network commissioning for devices reached over Bluetooth: the controller
+  reads the device's Network Commissioning features and gives it the Thread
+  dataset (`thread_dataset`, `thread_dataset_url` or the configured border
+  router) or the Wi-Fi network (`wifi`) the commission request carries, inside
+  the fail-safe, before CASE. Datasets and passphrases are never stored or
+  logged.
+
 ## [0.1.0] - 2026-11-20
 
 ### Added
