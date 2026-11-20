@@ -68,6 +68,7 @@ const ADMINISTRATOR_COMMISSIONING: u32 = 0x003C;
 const GROUPS: u32 = 0x0004;
 const GROUP_KEY_MANAGEMENT: u32 = 0x003F;
 const GROUPCAST: u32 = 0x0065;
+const ACCESS_CONTROL: u32 = 0x001F;
 const NETWORK_COMMISSIONING: u32 = 0x0031;
 const ADD_WIFI_NETWORK: u32 = 0x02;
 const ADD_THREAD_NETWORK: u32 = 0x03;
@@ -1482,6 +1483,9 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
                     "endpoints": [endpoint],
                     "keySetID": key_set,
                     "key": hex::encode(epoch_key),
+                    // The node grants the group Operate on these endpoints,
+                    // or it would refuse the group's commands.
+                    "useAuxiliaryACL": true,
                     "mcastAddrPolicy": 1, // per group
                 }),
                 None,
@@ -1562,6 +1566,62 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             None,
         )
         .await?;
+
+        // ...an access control entry letting the group operate the
+        // endpoint, beside the node's other entries on our fabric (the write
+        // replaces them all, our own administrator entry included)...
+        let acl = self
+            .read(
+                node,
+                AttributePath {
+                    endpoint: Some(ROOT_ENDPOINT),
+                    cluster: Some(ACCESS_CONTROL),
+                    attribute: Some(0), // ACL
+                },
+            )
+            .await?;
+        // Entries the node generates itself (auxiliary ones) are not
+        // written back, and only the fields a client writes are kept.
+        let mut entries: Vec<Value> = acl
+            .first()
+            .and_then(|a| a.value.as_array().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| e.get("auxiliaryType").is_none_or(Value::is_null))
+            .map(|e| {
+                json!({
+                    "privilege": e["privilege"],
+                    "authMode": e["authMode"],
+                    "subjects": e["subjects"],
+                    "targets": e["targets"],
+                    "fabricIndex": 0,
+                })
+            })
+            .collect();
+        let entry = json!({
+            "privilege": 3, // Operate
+            "authMode": 3,  // Group
+            "subjects": [group],
+            "targets": [{ "cluster": null, "endpoint": endpoint, "deviceType": null }],
+            "fabricIndex": 0,
+        });
+        let has = |e: &Value| {
+            e["authMode"] == entry["authMode"]
+                && e["subjects"] == entry["subjects"]
+                && e["targets"] == entry["targets"]
+        };
+        if !entries.iter().any(has) {
+            entries.push(entry);
+            self.write(
+                node,
+                ROOT_ENDPOINT,
+                ACCESS_CONTROL,
+                0,
+                &Value::Array(entries),
+                None,
+            )
+            .await?;
+        }
 
         // ...and the endpoint in the group.
         let response = self
