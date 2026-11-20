@@ -6,6 +6,7 @@ mod ble;
 pub mod ca;
 mod controller;
 mod fsutil;
+mod groups;
 mod identity;
 mod mdns;
 pub mod network;

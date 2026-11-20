@@ -7,6 +7,10 @@ All notable changes are listed here. The project follows
 
 ### Added
 
+- Groups: `Controller::add_to_group` gives a node the fabric's group key and
+  puts an endpoint in a group; `group_invoke` sends one multicast command to
+  every member; MQTT requests `add_to_group`, `remove_from_group`,
+  `group_invoke`.
 - Commissioning over Bluetooth LE (feature `ble`, on by default), with
   bluetooth-bridge's `bluetooth-host` as the GATT central under rs-matter's
   BTP: `bluetooth = "hci0"` or `"tcp:host:port"`. Not yet exercised end to end

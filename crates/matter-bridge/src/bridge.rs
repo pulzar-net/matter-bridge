@@ -448,6 +448,14 @@ fn node_of(names: &RwLock<Names>, body: &Value) -> Result<u64, String> {
         .ok_or_else(|| format!("no device `{name}`"))
 }
 
+fn group_of(body: &Value) -> Result<u16, String> {
+    body.get("group")
+        .and_then(Value::as_u64)
+        .and_then(|g| u16::try_from(g).ok())
+        .filter(|g| *g != 0)
+        .ok_or_else(|| "`group` is required: 1 to 65535".to_string())
+}
+
 fn path_of(body: &Value) -> Result<(u16, u32), String> {
     let endpoint = body
         .get("endpoint")
@@ -608,6 +616,49 @@ async fn request(
                 .invoke(node, endpoint, cluster, command, fields, timed(body))
                 .await
                 .map_err(e)
+        }
+        "add_to_group" | "remove_from_group" => {
+            let node = node_of(names, body)?;
+            let endpoint = body
+                .get("endpoint")
+                .and_then(Value::as_u64)
+                .and_then(|e| u16::try_from(e).ok())
+                .ok_or("`endpoint` is required")?;
+            let group = group_of(body)?;
+            if name == "add_to_group" {
+                let label = body
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                controller
+                    .add_to_group(node, endpoint, group, label)
+                    .await
+                    .map_err(e)?;
+            } else {
+                controller
+                    .remove_from_group(node, endpoint, group)
+                    .await
+                    .map_err(e)?;
+            }
+            Ok(Value::Null)
+        }
+        "group_invoke" => {
+            let group = group_of(body)?;
+            let cluster = body
+                .get("cluster")
+                .and_then(|v| topics::value_id(v, topics::parse_cluster))
+                .ok_or("`cluster` is required: a name or a number")?;
+            let command = body
+                .get("command")
+                .and_then(|v| topics::value_id(v, |s| topics::parse_command(cluster, s)))
+                .ok_or("`command` is required")?;
+            let fields = body.get("fields").cloned().unwrap_or(Value::Null);
+            controller
+                .group_invoke(group, cluster, command, fields)
+                .await
+                .map_err(e)?;
+            Ok(Value::Null)
         }
         "open_commissioning_window" => {
             let node = node_of(names, body)?;

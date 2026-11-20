@@ -65,6 +65,8 @@ const DESCRIPTOR: u32 = 0x001D;
 const BASIC_INFORMATION: u32 = 0x0028;
 const OPERATIONAL_CREDENTIALS: u32 = 0x003E;
 const ADMINISTRATOR_COMMISSIONING: u32 = 0x003C;
+const GROUPS: u32 = 0x0004;
+const GROUP_KEY_MANAGEMENT: u32 = 0x003F;
 const NETWORK_COMMISSIONING: u32 = 0x0031;
 const ADD_WIFI_NETWORK: u32 = 0x02;
 const ADD_THREAD_NETWORK: u32 = 0x03;
@@ -121,6 +123,9 @@ enum Job {
     Discover(u16, Reply<Vec<Commissionable>>),
     Nodes(Reply<Vec<Node>>),
     Abort(Reply<bool>),
+    AddToGroup(u64, u16, u16, String, Reply<()>),
+    RemoveFromGroup(u64, u16, u16, Reply<()>),
+    GroupInvoke(u16, u32, u32, Value, Reply<()>),
 }
 
 impl Controller {
@@ -252,6 +257,44 @@ impl Controller {
         self.call(|r| Job::Discover(seconds, r)).await
     }
 
+    /// Put an endpoint of `node` in `group` (named `name` on the node): the
+    /// node gets the fabric's group key and the group, so a group command
+    /// reaches it.
+    pub async fn add_to_group(
+        &self,
+        node: u64,
+        endpoint: u16,
+        group: u16,
+        name: String,
+    ) -> Result<(), Error> {
+        self.call(|r| Job::AddToGroup(node, endpoint, group, name, r))
+            .await
+    }
+
+    /// Take an endpoint of `node` out of `group`.
+    pub async fn remove_from_group(
+        &self,
+        node: u64,
+        endpoint: u16,
+        group: u16,
+    ) -> Result<(), Error> {
+        self.call(|r| Job::RemoveFromGroup(node, endpoint, group, r))
+            .await
+    }
+
+    /// Send a command to every member of `group` at once, as one multicast
+    /// message (no response comes back from a group).
+    pub async fn group_invoke(
+        &self,
+        group: u16,
+        cluster: u32,
+        command: u32,
+        fields: Value,
+    ) -> Result<(), Error> {
+        self.call(|r| Job::GroupInvoke(group, cluster, command, fields, r))
+            .await
+    }
+
     /// Stop the commissioning in progress, rolling the device back;
     /// whether one was running.
     pub async fn abort_commissioning(&self) -> Result<bool, Error> {
@@ -319,6 +362,8 @@ struct Ctx<C: 'static> {
     tasks: RefCell<HashMap<u64, tokio::task::JoinHandle<()>>>,
     commissioning: tokio::sync::Mutex<()>,
     abort: tokio::sync::Notify,
+    kv: &'static rs_matter::persist::MatterKvBlobStoreAccess<'static, DummyKvBlobStore>,
+    groups: RefCell<crate::groups::GroupKey>,
     #[cfg(feature = "ble")]
     ble: Option<crate::ble::Ble>,
 }
@@ -445,6 +490,10 @@ async fn run(
     let im_state: &'static InteractionModelState<1, 1024> =
         Box::leak(Box::new(InteractionModelState::new()));
     let kv: &'static _ = Box::leak(Box::new(matter.kv(DummyKvBlobStore)));
+
+    // The fabric's group key, and the groups this controller sends to.
+    let groups = crate::groups::GroupKey::load_or_create(&config.state_dir.join("groups.json"))?;
+    groups.install(matter, fab_idx)?;
     let sink = ReportSink {
         subs: subs.clone(),
         events: events.clone(),
@@ -472,6 +521,8 @@ async fn run(
         tasks: RefCell::new(HashMap::new()),
         commissioning: tokio::sync::Mutex::new(()),
         abort: tokio::sync::Notify::new(),
+        kv,
+        groups: RefCell::new(groups),
         #[cfg(feature = "ble")]
         ble,
     });
@@ -667,6 +718,15 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             }
             Job::Nodes(r) => {
                 let _ = r.send(Ok(self.store.borrow().nodes().cloned().collect()));
+            }
+            Job::AddToGroup(node, ep, group, name, r) => {
+                let _ = r.send(self.add_to_group(node, ep, group, &name).await);
+            }
+            Job::RemoveFromGroup(node, ep, group, r) => {
+                let _ = r.send(self.remove_from_group(node, ep, group).await);
+            }
+            Job::GroupInvoke(group, cl, cmd, fields, r) => {
+                let _ = r.send(self.group_invoke(group, cl, cmd, &fields).await);
             }
             Job::Abort(r) => {
                 // A commissioning holds the lock; with none running there is
@@ -1378,6 +1438,143 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         });
         self.store.borrow_mut().remove(node_id)?;
         self.events.send(Event::NodeRemoved { node: node_id });
+        Ok(())
+    }
+
+    async fn add_to_group(
+        &self,
+        node: u64,
+        endpoint: u16,
+        group: u16,
+        name: &str,
+    ) -> Result<(), Error> {
+        self.known(node)?;
+        if group == 0 {
+            return Err(Error::Invalid("group 0 is not a group".into()));
+        }
+        let (key_set, epoch_key, start) = {
+            let g = self.groups.borrow();
+            (g.key_set_id, g.epoch_key, g.epoch_start_time)
+        };
+
+        // The fabric's group key set...
+        self.invoke(
+            node,
+            ROOT_ENDPOINT,
+            GROUP_KEY_MANAGEMENT,
+            0x00, // KeySetWrite
+            &json!({ "0": {
+                "0": key_set, "1": 0, "2": hex::encode(epoch_key), "3": start,
+                "4": null, "5": null, "6": null, "7": null,
+            } }),
+            None,
+        )
+        .await?;
+
+        // ...mapped to the group, beside the node's other mappings on our
+        // fabric (the write replaces them all)...
+        let current = self
+            .read(
+                node,
+                AttributePath {
+                    endpoint: Some(ROOT_ENDPOINT),
+                    cluster: Some(GROUP_KEY_MANAGEMENT),
+                    attribute: Some(0), // GroupKeyMap
+                },
+            )
+            .await?;
+        let mut map: Vec<Value> = current
+            .first()
+            .and_then(|a| a.value.as_array().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.get("groupId").and_then(Value::as_u64) != Some(u64::from(group)))
+            .map(|m| json!({ "1": m["groupId"], "2": m["groupKeySetID"], "254": 0 }))
+            .collect();
+        map.push(json!({ "1": group, "2": key_set, "254": 0 }));
+        self.write(
+            node,
+            ROOT_ENDPOINT,
+            GROUP_KEY_MANAGEMENT,
+            0,
+            &Value::Array(map),
+            None,
+        )
+        .await?;
+
+        // ...and the endpoint in the group.
+        let response = self
+            .invoke(
+                node,
+                endpoint,
+                GROUPS,
+                0x00,
+                &json!({ "0": group, "1": name }),
+                None,
+            )
+            .await?;
+        match response.get("status").and_then(Value::as_u64) {
+            Some(0) | None => {}
+            Some(status) => return Err(Error::Status(format!("AddGroup: status {status:#04x}"))),
+        }
+
+        self.groups
+            .borrow_mut()
+            .add(group, &self.config.state_dir.join("groups.json"))?;
+        self.matter.with_state(|state| {
+            let fabric = state.fabrics.fabric_mut(self.fab_idx)?;
+            fabric.groups_mut().key_map_set_group(group, key_set)
+        })?;
+        Ok(())
+    }
+
+    async fn remove_from_group(&self, node: u64, endpoint: u16, group: u16) -> Result<(), Error> {
+        self.known(node)?;
+        let response = self
+            .invoke(node, endpoint, GROUPS, 0x03, &json!({ "0": group }), None)
+            .await?;
+        match response.get("status").and_then(Value::as_u64) {
+            Some(0) | None => Ok(()),
+            Some(status) => Err(Error::Status(format!("RemoveGroup: status {status:#04x}"))),
+        }
+    }
+
+    async fn group_invoke(
+        &self,
+        group: u16,
+        cluster: u32,
+        command: u32,
+        fields: &Value,
+    ) -> Result<(), Error> {
+        use rs_matter::im::CmdPath;
+
+        if !self.groups.borrow().groups.contains(&group) {
+            return Err(Error::Invalid(format!(
+                "no device has been put in group {group}"
+            )));
+        }
+        let shape = matter_model::cluster(cluster)
+            .and_then(|c| c.command(command))
+            .and_then(|c| c.request)
+            .map_or(Shape::ANY, |s| s.shape());
+        let fields = if fields.is_null() {
+            json!({})
+        } else {
+            fields.clone()
+        };
+        let data = encode_to_vec(shape, &fields, MAX_PAYLOAD)?;
+        let exchange =
+            Exchange::initiate_group(self.matter, self.crypto, self.kv, self.fab_idx, group)?;
+        exchange
+            .group_invoke_with(|b| {
+                b.push()?
+                    .path_from(&CmdPath::new(None, Some(cluster), Some(command)))?
+                    .data(|w| {
+                        TLVElement::new(&data).to_tlv(&TLVTag::Context(CmdDataTag::Data as u8), w)
+                    })?
+                    .end()
+            })
+            .await?;
         Ok(())
     }
 

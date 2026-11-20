@@ -22,7 +22,7 @@ matter-controller = { path = "crates/matter-controller", version = "0.1.0", defa
 # rs-matter is used from a pinned commit of its main branch: the controller
 # side (commissioner, IM client, mDNS browse) is newer than its last release.
 # Dependabot moves the pin; CI runs the whole suite on every move.
-rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["os", "rustcrypto", "log", "max-sessions-64"] }
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["os", "rustcrypto", "log", "max-sessions-64", "groups"] }
 rs-matter-tlv = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
 rs-matter-utils = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356", default-features = false, features = ["std"] }
 rs-matter-codegen = { git = "https://github.com/project-chip/rs-matter", rev = "977e18d9f1939d334b27e5e0c7a010368860e356" }

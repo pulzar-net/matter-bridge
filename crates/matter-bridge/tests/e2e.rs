@@ -284,6 +284,29 @@ async fn commissions_a_device_and_bridges_it() {
     mqtt.wait("matter/dut/0/basic_information/node_label", |v| v == "e2e")
         .await;
 
+    // A group: the light's endpoint 1 joins it, and one multicast Toggle to
+    // the group changes it, as the subscription reports.
+    let before = mqtt
+        .wait("matter/dut/1/on_off/on_off", Json::is_boolean)
+        .await;
+    mqtt.request(
+        "add_to_group",
+        json!({"device": "dut", "endpoint": 1, "group": 257, "name": "e2e", "transaction": "g"}),
+        30,
+    )
+    .await;
+    mqtt.seen.clear();
+    mqtt.request(
+        "group_invoke",
+        json!({"group": 257, "cluster": "on_off", "command": "toggle", "transaction": "gi"}),
+        30,
+    )
+    .await;
+    mqtt.wait("matter/dut/1/on_off/on_off", |v| {
+        v.is_boolean() && v != &before
+    })
+    .await;
+
     // An invoke whose response command is decoded with field names.
     let response = mqtt
         .request(
@@ -355,9 +378,10 @@ async fn commissions_a_device_and_bridges_it() {
         .unwrap();
     assert_eq!(fabrics[0].value, json!(2), "{fabrics:?}");
 
-    // The first admin still controls it.
+    // The first admin still controls it (the group toggle left it at !on).
+    mqtt.seen.clear();
     mqtt.publish("matter/dut/1/on_off/command/toggle", "").await;
-    mqtt.wait("matter/dut/1/on_off/on_off", |v| v == &json!(!on))
+    mqtt.wait("matter/dut/1/on_off/on_off", |v| v == &json!(on))
         .await;
     drop(second);
 
