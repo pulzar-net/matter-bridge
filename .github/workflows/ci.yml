@@ -31,7 +31,8 @@ env:
   NIGHTLY: nightly-2026-11-14
   ZIG: 0.16.0
   ZIGBUILD: 0.24.1
-  # Static binary budget for the gateways, bytes.
+  # Flash budget for the gateway binary, bytes, as squashfs stores it
+  # (xz); the raw size is reported too.
   MAX_BINARY_SIZE: 4194304
   # connectedhomeip's certification test apps, by SDK commit.
   CHIP_CERT_BINS: connectedhomeip/chip-cert-bins:6ff03a282176cb02156bfafb9988498da3c35ffb
@@ -169,7 +170,7 @@ jobs:
             size="$(stat -c %s "${bin}")"
             xz_size="$(xz -9 -c "${bin}" | wc -c)"
             echo "${target} matter-bridge: ${size} bytes, ${xz_size} bytes xz" | tee -a "${GITHUB_STEP_SUMMARY}"
-            [ "${size}" -le "${MAX_BINARY_SIZE}" ] || { echo "matter-bridge is over the ${MAX_BINARY_SIZE} byte budget" >&2; exit 1; }
+            [ "${xz_size}" -le "${MAX_BINARY_SIZE}" ] || { echo "matter-bridge is over the ${MAX_BINARY_SIZE} byte flash budget" >&2; exit 1; }
             runner="CARGO_TARGET_$(echo "${target}" | tr 'a-z-' 'A-Z_')_RUNNER"
             "${!runner}" "${bin}" --version
             "${!runner}" "${bin}" parse 3497-011-2332
