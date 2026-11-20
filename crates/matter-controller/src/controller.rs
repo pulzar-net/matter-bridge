@@ -1465,9 +1465,12 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             ROOT_ENDPOINT,
             GROUP_KEY_MANAGEMENT,
             0x00, // KeySetWrite
-            &json!({ "0": {
-                "0": key_set, "1": 0, "2": hex::encode(epoch_key), "3": start,
-                "4": null, "5": null, "6": null, "7": null,
+            &json!({ "groupKeySet": {
+                "groupKeySetID": key_set,
+                "groupKeySecurityPolicy": 0, // trust first
+                "epochKey0": hex::encode(epoch_key),
+                "epochStartTime0": start,
+                "groupKeyMulticastPolicy": 0, // per group id
             } }),
             None,
         )
@@ -1767,6 +1770,39 @@ fn random_passcode() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The group requests fit the data model as it is now.
+    #[test]
+    fn group_requests_encode() {
+        let gkm = matter_model::cluster(GROUP_KEY_MANAGEMENT).unwrap();
+        let req = gkm.command(0x00).unwrap().request.unwrap();
+        encode_to_vec(
+            req.shape(),
+            &json!({ "groupKeySet": {
+                "groupKeySetID": 0x4D42,
+                "groupKeySecurityPolicy": 0,
+                "epochKey0": "00112233445566778899aabbccddeeff",
+                "epochStartTime0": 1,
+                "groupKeyMulticastPolicy": 0,
+            } }),
+            MAX_PAYLOAD,
+        )
+        .unwrap();
+        let map = gkm.attribute(0).unwrap();
+        encode_to_vec(
+            map.shape(),
+            &json!([{ "1": 257, "2": 0x4D42, "254": 0 }]),
+            MAX_PAYLOAD,
+        )
+        .unwrap();
+        let add = matter_model::cluster(GROUPS)
+            .unwrap()
+            .command(0x00)
+            .unwrap()
+            .request
+            .unwrap();
+        encode_to_vec(add.shape(), &json!({ "0": 257, "1": "e2e" }), MAX_PAYLOAD).unwrap();
+    }
 
     #[test]
     fn passcodes_are_valid() {

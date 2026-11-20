@@ -124,11 +124,16 @@ impl GattPeripheral for HostGatt {
 
         let mut events = host.events();
         let mut peer: Option<(u16, BtAddr)> = None;
+        // As the C++ SDK's peripherals do: BTP's handshake response goes out
+        // once the central has subscribed to C2, which it does after writing
+        // the request.
+        let mut subscribed = false;
         let mut out = [0u8; 512];
         loop {
             let mtu = peer
                 .and_then(|(h, _)| host.connection(h))
                 .map(|c| c.att_mtu());
+            let mut flush = false;
             tokio::select! {
                 event = events.recv() => match event {
                     Ok(HostEvent::GattWrite { handle, attribute, value }) if attribute == c1 => {
@@ -140,18 +145,23 @@ impl GattPeripheral for HostGatt {
                         let mtu = host.connection(handle).map(|c| c.att_mtu());
                         btp.process_incoming(mtu, addr, &value)?;
                     }
+                    Ok(HostEvent::GattSubscription { attribute, indicate, .. }) if attribute == c2 => {
+                        subscribed = indicate;
+                        flush = subscribed;
+                    }
                     Ok(_) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(e) => return Err(io(e)),
                 },
-                () = btp.wait_outgoing() => {
-                    loop {
-                        let len = btp.process_outgoing(mtu, &mut out)?;
-                        if len == 0 {
-                            break;
-                        }
-                        server.notify(c2, &out[..len]).await.map_err(io)?;
+                () = btp.wait_outgoing(), if subscribed => flush = true,
+            }
+            if flush {
+                loop {
+                    let len = btp.process_outgoing(mtu, &mut out)?;
+                    if len == 0 {
+                        break;
                     }
+                    server.notify(c2, &out[..len]).await.map_err(io)?;
                 }
             }
         }
