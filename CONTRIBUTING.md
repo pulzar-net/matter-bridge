@@ -9,6 +9,8 @@ rs-matter itself goes to rs-matter's own security process.
 
 ## Before you start
 
+- **Questions** (how do I, is this expected): ask in
+  [Discussions](https://github.com/pulzar-net/matter-bridge/discussions).
 - **Device reports:** use the
   [device form](https://github.com/pulzar-net/matter-bridge/issues/new?template=device.yml).
 - **Bugs:** use the [bug form](https://github.com/pulzar-net/matter-bridge/issues/new?template=bug.yml),
@@ -99,7 +101,10 @@ cargo +nightly fuzz run json_to_tlv -- -max_total_time=300
   key or an MQTT topic.
 - Sign off every commit (see below).
 
-CI must pass before a pull request is merged.
+CI must pass before a pull request is merged: the tests, fuzzing and the
+cross builds, and the end-to-end test against the reference device. Pull requests are squash-merged, so the pull
+request's title and description become the commit on `main`: write them
+as you would a commit message.
 
 ## Developer Certificate of Origin
 

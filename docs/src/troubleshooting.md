@@ -59,6 +59,7 @@ one. Only commission devices you trust. See the [security model](security.md).
 Matter bridge in the other direction)?** Not yet; it is designed, see
 [Design](design.md).
 
-**Where do I ask a question?** Open an
-[issue](https://github.com/pulzar-net/matter-bridge/issues). For security
+**Where do I ask a question?** In
+[Discussions](https://github.com/pulzar-net/matter-bridge/discussions).
+Bugs go in [issues](https://github.com/pulzar-net/matter-bridge/issues). For security
 problems, see [SECURITY.md](https://github.com/pulzar-net/matter-bridge/blob/main/SECURITY.md).

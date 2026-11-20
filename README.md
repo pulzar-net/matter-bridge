@@ -276,8 +276,7 @@ can accept 0.x maturity and, for now, unverified attestation.
   Matter bridge.
 
 The [design page](https://pulzar-net.github.io/matter-bridge/design.html)
-has the details. Ideas and requests go in
-[issues](https://github.com/pulzar-net/matter-bridge/issues).
+has the details. Questions go in [Discussions](https://github.com/pulzar-net/matter-bridge/discussions); bugs and requests in [issues](https://github.com/pulzar-net/matter-bridge/issues).
 
 ## Contributing
 
