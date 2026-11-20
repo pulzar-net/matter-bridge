@@ -45,8 +45,8 @@ Expect rough edges and breaking changes between 0.x releases.
 | A subscription to every device, renewed when it lapses | done in 0.1.0 |
 | Multi-admin: open a commissioning window for another ecosystem | done in 0.1.0 |
 | Home Assistant MQTT discovery for lights, switches, sensors | done in 0.1.0 |
-| Commissioning over Bluetooth LE, giving the device Wi-Fi credentials | done in 0.1.0, tested on simulated controllers only |
-| Giving a Thread device the border router's dataset | done in 0.1.0, untested with a real Thread device |
+| Commissioning over Bluetooth LE, giving the device Wi-Fi credentials | built in 0.1.0, not yet passing its simulated end-to-end test |
+| Giving a Thread device the border router's dataset | built in 0.1.0, untested with a real Thread device |
 | Device attestation verification | in progress (blocks production use) |
 | An intermediate CA under a root held elsewhere | done in 0.1.0 |
 | More than 64 live nodes | in progress |
@@ -64,7 +64,7 @@ bridge is on works through the clusters it serves.
 | connectedhomeip's `chip-all-clusters-app` (reference device) | commission over IP | tested in CI on every commit |
 | Matter devices on Ethernet, or already on your Wi-Fi or Thread network | commission over IP with their pairing code | expected |
 | Devices already in Apple Home, Google Home, Home Assistant or another ecosystem | ask that app for a pairing code ("share" or "turn on pairing mode"), then commission over IP | expected |
-| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE, with the network's credentials | expected (simulator-tested) |
+| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE, with the network's credentials | built, not yet tested end to end |
 
 Home Assistant discovery covers lights (On/Off, with brightness from Level
 Control), switches and plugs, temperature, humidity, pressure and

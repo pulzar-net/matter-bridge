@@ -69,8 +69,9 @@ seconds (180 to 900, default 300). Enter either in the other app.
 
 ## Over Bluetooth LE
 
-> Needs real hardware: Bluetooth commissioning, with Wi-Fi credentials, is
-> tested in CI with simulated controllers only. Handing a Thread device the
+> Not tested yet: Bluetooth commissioning is built, but its end-to-end test
+> on simulated controllers does not pass yet, and it has not been tried on
+> real hardware. Commissioning over IP is the tested path. Handing a Thread device the
 > network's dataset is built, but untested with a real Thread device.
 
 A new Wi-Fi or Thread device is not on any IP network yet: it advertises

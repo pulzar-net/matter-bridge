@@ -17,7 +17,7 @@ any device that can be commissioned works through what it serves.
 | Ethernet devices | commission over IP | reference device in CI |
 | Wi-Fi devices already on your Wi-Fi (added by another ecosystem) | commission over IP with a code from that ecosystem | expected |
 | Thread devices already on a Thread network (added by another ecosystem) | commission over IP through the network's border router | expected |
-| New Wi-Fi devices | commission over Bluetooth LE, with Wi-Fi credentials | simulated controllers only |
+| New Wi-Fi devices | commission over Bluetooth LE, with Wi-Fi credentials | not yet: its simulated test does not pass yet |
 | New Thread devices | commission over Bluetooth LE, with the Thread dataset | not yet with a real Thread device |
 | Sleepy (ICD) devices | not supported | planned |
 
