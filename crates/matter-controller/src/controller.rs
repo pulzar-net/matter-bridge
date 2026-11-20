@@ -10,14 +10,22 @@ use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime};
 
 use matter_model::{encode_to_vec, Shape};
+use rs_matter::acl::{AclEntry, AuthMode, Target};
 use rs_matter::attest::DeviceAttestation;
 use rs_matter::basic_info::BasicInfoConfig;
+use rs_matter::bdx::{Bdx, PROTO_ID_BDX};
 use rs_matter::cert::gen::VALID_FOREVER;
 use rs_matter::cert::{MAX_CERT_TLV_AND_ASN1_LEN, MAX_CERT_TLV_LEN};
 use rs_matter::crypto::{
     default_crypto, CanonAeadKeyRef, CanonPkcPublicKeyRef, CanonPkcSecretKeyRef, Crypto,
 };
-use rs_matter::dm::{EmptyHandler, Node as DmNode};
+use rs_matter::dm::clusters::desc::{self, ClusterHandler as _};
+use rs_matter::dm::clusters::ota_prov::{OtaBdxHandler, OtaProviderHandler};
+use rs_matter::dm::devices::DEV_TYPE_OTA_PROVIDER;
+use rs_matter::dm::{
+    Async, Cluster, Dataver, EmptyHandler, Endpoint as DmEndpoint, Node as DmNode, Privilege,
+};
+use rs_matter::im::PROTO_ID_INTERACTION_MODEL;
 use rs_matter::im::{
     AttrDataTag, AttrPath, CmdDataTag, CmdResp, EventFilter, EventPath, GenericPath, IMStatusCode,
     ImClient, InteractionModel, InteractionModelState, ReportContext, ReportDataHandler,
@@ -28,9 +36,11 @@ use rs_matter::onboard::{CommissionHooks, CommissionOptions, Commissioner};
 use rs_matter::pairing::qr::{no_optional_data, CommFlowType, QrPayload};
 use rs_matter::pairing::{BasicCommData, DevCommData, DiscoveryCapabilities};
 use rs_matter::persist::DummyKvBlobStore;
+use rs_matter::respond::ChainedExchangeHandler;
 use rs_matter::respond::Responder;
 use rs_matter::sc::pase::{Spake2pVerifierPassword, Spake2pVerifierPasswordRef};
 use rs_matter::sc::ExchangeInitiator as _;
+use rs_matter::sc::SecureChannel;
 use rs_matter::tlv::{TLVElement, TLVTag, ToTLV as _};
 use rs_matter::transport::exchange::{Exchange, MatterBuffers};
 use rs_matter::transport::network::mdns::{MdnsBrowseMatch, MdnsBrowseQuery};
@@ -43,6 +53,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::ca::{AnyCa, CertificateAuthority, FileCa, IntermediateCa};
 use crate::identity::Identity;
 use crate::onboarding::Onboarding;
+use crate::ota::{OtaDir, OtaImage};
 
 #[cfg(feature = "ble")]
 use crate::ble::Link;
@@ -70,6 +81,21 @@ const GROUP_KEY_MANAGEMENT: u32 = 0x003F;
 const GROUPCAST: u32 = 0x0065;
 const ACCESS_CONTROL: u32 = 0x001F;
 const NETWORK_COMMISSIONING: u32 = 0x0031;
+const OTA_REQUESTOR: u32 = 0x002A;
+/// OTA Software Update Requestor's AnnounceOTAProvider.
+const ANNOUNCE_OTA_PROVIDER: u32 = 0x0000;
+
+/// The OTA Provider cluster as rs-matter's handler serves it.
+const OTA_PROVIDER: Cluster<'static> = <OtaProviderHandler<&OtaDir> as rs_matter::dm::clusters::ota_prov::ClusterAsyncHandler>::CLUSTER;
+
+/// The controller node's data model: an OTA provider on the root endpoint.
+const CONTROLLER_NODE: DmNode<'static> = DmNode {
+    endpoints: &[DmEndpoint::new(
+        ROOT_ENDPOINT,
+        &[DEV_TYPE_OTA_PROVIDER],
+        &[desc::DescHandler::CLUSTER, OTA_PROVIDER],
+    )],
+};
 const ADD_WIFI_NETWORK: u32 = 0x02;
 const ADD_THREAD_NETWORK: u32 = 0x03;
 const CONNECT_NETWORK: u32 = 0x06;
@@ -85,6 +111,7 @@ pub struct Controller {
     jobs: mpsc::UnboundedSender<Job>,
     events: EventBus,
     info: ControllerInfo,
+    ota_dir: std::path::PathBuf,
 }
 
 type Reply<T> = oneshot::Sender<Result<T, Error>>;
@@ -92,7 +119,7 @@ type Reply<T> = oneshot::Sender<Result<T, Error>>;
 /// Hands every [`Event`] to every receiver [`Controller::events`] gave out,
 /// without loss; receivers that were dropped are forgotten.
 #[derive(Clone, Default)]
-struct EventBus(std::sync::Arc<std::sync::Mutex<Vec<mpsc::UnboundedSender<Event>>>>);
+pub(crate) struct EventBus(std::sync::Arc<std::sync::Mutex<Vec<mpsc::UnboundedSender<Event>>>>);
 
 impl EventBus {
     fn subscribe(&self) -> mpsc::UnboundedReceiver<Event> {
@@ -101,7 +128,7 @@ impl EventBus {
         rx
     }
 
-    fn send(&self, event: Event) {
+    pub(crate) fn send(&self, event: Event) {
         let mut subscribers = self.0.lock().unwrap();
         subscribers.retain(|s| !s.is_closed());
         if let Some((last, rest)) = subscribers.split_last() {
@@ -128,6 +155,7 @@ enum Job {
     AddToGroup(u64, u16, u16, String, Reply<()>),
     RemoveFromGroup(u64, u16, u16, Reply<()>),
     GroupInvoke(u16, u32, u32, Value, Reply<()>),
+    AnnounceOta(u64, Reply<Option<OtaImage>>),
 }
 
 impl Controller {
@@ -139,6 +167,7 @@ impl Controller {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let thread_events = events.clone();
+        let ota_dir = config.ota_dir.clone();
         std::thread::Builder::new()
             .name("matter".into())
             .spawn(move || {
@@ -166,6 +195,7 @@ impl Controller {
             jobs: jobs_tx,
             events,
             info,
+            ota_dir,
         })
     }
 
@@ -295,6 +325,20 @@ impl Controller {
     ) -> Result<(), Error> {
         self.call(|r| Job::GroupInvoke(group, cluster, command, fields, r))
             .await
+    }
+
+    /// The OTA image files the controller offers (see [`Config::ota_dir`]).
+    pub fn ota_images(&self) -> Result<Vec<OtaImage>, Error> {
+        crate::ota::list(&self.ota_dir)
+    }
+
+    /// Tell `node` to ask this controller for a software update, if an image
+    /// in the OTA directory is newer for it; the image it will be offered,
+    /// or `None` (and no announcement) when there is none. The update's
+    /// steps arrive as [`Event::Ota`] and the node's own OTA Requestor
+    /// events.
+    pub async fn announce_ota(&self, node: u64) -> Result<Option<OtaImage>, Error> {
+        self.call(|r| Job::AnnounceOta(node, r)).await
     }
 
     /// Stop the commissioning in progress, rolling the device back;
@@ -488,8 +532,27 @@ async fn run(
 
     let subs = Rc::new(Subscriptions::default());
 
-    // The controller's own data model serves no clusters; its interaction
-    // model is there to take the reports of the subscriptions we hold.
+    // The controller's own data model serves the OTA provider; its
+    // interaction model also takes the reports of the subscriptions we hold.
+    std::fs::create_dir_all(&config.ota_dir)?;
+    let ota: &'static OtaDir = Box::leak(Box::new(OtaDir::new(
+        config.ota_dir.clone(),
+        events.clone(),
+    )));
+    // Every node of the fabric may ask for an update.
+    matter.with_state(|state| {
+        let mut entry = AclEntry::new(None, Privilege::OPERATE, AuthMode::Case);
+        entry.add_target(Target::new(
+            Some(ROOT_ENDPOINT),
+            Some(OTA_PROVIDER.id),
+            None,
+        ))?;
+        state
+            .fabrics
+            .fabric_mut(fab_idx)?
+            .acl_add(entry)
+            .map(|_| ())
+    })?;
     let buffers: &'static MatterBuffers = Box::leak(Box::new(MatterBuffers::new()));
     let im_state: &'static InteractionModelState<1, 1024> =
         Box::leak(Box::new(InteractionModelState::new()));
@@ -506,12 +569,36 @@ async fn run(
         matter,
         crypto,
         buffers,
-        (DmNode::new(&[]), EmptyHandler),
+        (
+            CONTROLLER_NODE,
+            EmptyHandler
+                .chain(
+                    |e, c| e == ROOT_ENDPOINT && c == desc::DescHandler::CLUSTER.id,
+                    Async(desc::DescHandler::new(Dataver::new(rand::random())).adapt()),
+                )
+                .chain(
+                    |e, c| e == ROOT_ENDPOINT && c == OTA_PROVIDER.id,
+                    OtaProviderHandler::new(Dataver::new(rand::random()), matter, ota).adapt(),
+                ),
+        ),
         kv,
         sink,
         im_state,
     )));
-    let responder = Responder::new_default(im);
+    // The interaction model and secure channel, and BDX for the images.
+    let bdx_buffers: &'static MatterBuffers<2> =
+        Box::leak(Box::<MatterBuffers<2>>::new_uninit()).init_with(MatterBuffers::init());
+    let responder = Responder::new(
+        "Responder",
+        ChainedExchangeHandler::new(
+            PROTO_ID_INTERACTION_MODEL,
+            im,
+            SecureChannel::new(matter, crypto, im),
+        )
+        .chain(PROTO_ID_BDX, Bdx::new(OtaBdxHandler::new(bdx_buffers, ota))),
+        matter,
+        0,
+    );
 
     let ctx = Rc::new(Ctx {
         matter,
@@ -731,6 +818,9 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             }
             Job::GroupInvoke(group, cl, cmd, fields, r) => {
                 let _ = r.send(self.group_invoke(group, cl, cmd, &fields).await);
+            }
+            Job::AnnounceOta(node, r) => {
+                let _ = r.send(self.announce_ota(node).await);
             }
             Job::Abort(r) => {
                 // A commissioning holds the lock; with none running there is
@@ -1660,6 +1750,65 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             Some(0) | None => Ok(()),
             Some(status) => Err(Error::Status(format!("RemoveGroup: status {status:#04x}"))),
         }
+    }
+
+    /// Read one attribute of a node's root endpoint as a number.
+    async fn read_number(&self, node: u64, cluster: u32, attribute: u32) -> Result<u64, Error> {
+        let values = self
+            .read(
+                node,
+                AttributePath {
+                    endpoint: Some(ROOT_ENDPOINT),
+                    cluster: Some(cluster),
+                    attribute: Some(attribute),
+                },
+            )
+            .await?;
+        values
+            .first()
+            .and_then(|v| v.value.as_u64())
+            .ok_or_else(|| Error::Status(format!("{cluster:#06x}/{attribute:#06x}: no value")))
+    }
+
+    async fn announce_ota(&self, node: u64) -> Result<Option<OtaImage>, Error> {
+        let known = self.known(node)?;
+        let requestor = known
+            .endpoints
+            .iter()
+            .find(|(_, e)| e.server_clusters.contains(&OTA_REQUESTOR))
+            .map(|(id, _)| *id)
+            .ok_or_else(|| Error::Unsupported(format!("node {node} has no OTA Requestor")))?;
+        let vendor_id = self.read_number(node, BASIC_INFORMATION, 0x0002).await? as u16;
+        let product_id = self.read_number(node, BASIC_INFORMATION, 0x0004).await? as u16;
+        let version = self.read_number(node, BASIC_INFORMATION, 0x0009).await? as u32;
+
+        let images = crate::ota::list(&self.config.ota_dir)?;
+        let Some(image) = crate::ota::best(&images, vendor_id, product_id, version).cloned() else {
+            return Ok(None);
+        };
+        let info = self.matter.with_state(|state| {
+            state
+                .fabrics
+                .fabric(self.fab_idx)
+                .map(|f| (f.node_id(), f.vendor_id()))
+        })?;
+        self.invoke(
+            node,
+            requestor,
+            OTA_REQUESTOR,
+            ANNOUNCE_OTA_PROVIDER,
+            &json!({
+                "providerNodeID": info.0,
+                "vendorID": info.1,
+                // UrgentUpdateAvailable: a person asked for it, so the node
+                // asks at once rather than after its usual delay.
+                "announcementReason": 2,
+                "endpoint": ROOT_ENDPOINT,
+            }),
+            None,
+        )
+        .await?;
+        Ok(Some(image))
     }
 
     async fn group_invoke(

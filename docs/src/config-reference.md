@@ -43,6 +43,7 @@ The Matter controller.
 | `discovery_timeout` | integer (0 to 65535) | `30` | How long to look for a device to commission, seconds. |
 | `bluetooth` | string | unset | The Bluetooth controller for commissioning over BLE: `hci0` (the Linux HCI user channel; BlueZ must not hold it) or `tcp:host:port`. |
 | `thread_dataset_url` | string | unset | Where to read the Thread network's dataset for a Thread device: an OpenThread border router's REST API, e.g. `http://127.0.0.1:8081/node/dataset/active`. |
+| `ota_dir` | string | unset | The directory of Matter OTA image files offered to devices as software updates; `<data.dir>/ota` if unset. |
 
 ## `[data]`
 

@@ -38,7 +38,8 @@
         "max_report_interval": 60,
         "discovery_timeout": 30,
         "bluetooth": null,
-        "thread_dataset_url": null
+        "thread_dataset_url": null,
+        "ota_dir": null
       }
     },
     "data": {
@@ -195,6 +196,14 @@
         },
         "thread_dataset_url": {
           "description": "Where to read the Thread network's dataset for a Thread device: an\nOpenThread border router's REST API, e.g.\n`http://127.0.0.1:8081/node/dataset/active`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ota_dir": {
+          "description": "The directory of Matter OTA image files offered to devices as\nsoftware updates; `<data.dir>/ota` if unset.",
           "type": [
             "string",
             "null"

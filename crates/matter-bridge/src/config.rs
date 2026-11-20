@@ -117,6 +117,9 @@ pub struct MatterConfig {
     /// OpenThread border router's REST API, e.g.
     /// `http://127.0.0.1:8081/node/dataset/active`.
     pub thread_dataset_url: Option<String>,
+    /// The directory of Matter OTA image files offered to devices as
+    /// software updates; `<data.dir>/ota` if unset.
+    pub ota_dir: Option<PathBuf>,
 }
 
 impl Default for MatterConfig {
@@ -132,6 +135,7 @@ impl Default for MatterConfig {
             discovery_timeout: 30,
             bluetooth: None,
             thread_dataset_url: None,
+            ota_dir: None,
         }
     }
 }
@@ -165,6 +169,9 @@ impl Config {
         c.allow_unverified_attestation = self.matter.allow_unverified_attestation;
         c.max_report_interval = self.matter.max_report_interval;
         c.bluetooth = self.matter.bluetooth.clone();
+        if let Some(dir) = &self.matter.ota_dir {
+            c.ota_dir = dir.clone();
+        }
         c
     }
 }

@@ -59,6 +59,7 @@ each serves (from Descriptor). The same shape is in the `commission`,
 | `commissioning` | `node`, `step`: one per step of a commissioning |
 | `node_updated` | `node`: commissioned, interviewed or renamed |
 | `node_removed` | `node` |
+| `ota` | `node`, `step` (`offered`, `applying`, `applied`), `version` |
 | `availability` | `node`, `online`: its subscription started or lapsed |
 
 ## Values
@@ -142,6 +143,8 @@ Every request takes an optional `transaction`, copied into the response.
 | `remove` | `device`, optional `force` | `node` |
 | `discover` | optional `timeout` (seconds, default 5) | the commissionable devices seen |
 | `devices` | | every node |
+| `ota_images` | | the OTA images offered |
+| `ota_update` | `device` | the image it will be offered, or `null` when none is newer |
 
 `timed` sends the write or command as a timed interaction, which some
 clusters require (door locks, for example).
@@ -161,6 +164,24 @@ mosquitto_pub -t matter/bridge/request/group_invoke -m '{"group": 7, "cluster": 
 
 Group commands are not acknowledged; each member's new state comes back
 through its subscription.
+
+### Software updates
+
+The bridge is an OTA provider for the devices it commissioned. Matter OTA
+image files (`.ota`, as connectedhomeip's `ota_image_tool.py` makes them)
+placed in `matter.ota_dir` (`<data.dir>/ota` by default) are offered to the
+devices they are for: the newest image for a device's vendor and product
+that applies on top of its version. `ota_update` tells a device to ask now:
+
+```sh
+mosquitto_pub -t matter/bridge/request/ota_update -m '{"device": "lamp"}'
+```
+
+The device downloads the image from the bridge over BDX and applies it.
+Bridge events of type `ota` follow it (`step` is `offered`, `applying` or
+`applied`, with the `version`), and the device's own OTA Requestor events
+(`state_transition`, `download_error`, `version_applied`) arrive on its
+event topics.
 
 ## Home Assistant topics
 

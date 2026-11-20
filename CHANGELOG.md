@@ -5,6 +5,16 @@ All notable changes are listed here. The project follows
 
 ## [Unreleased]
 
+### Added
+
+- OTA provider: the controller offers the Matter OTA image files in
+  `Config::ota_dir` (`matter.ota_dir`) to the nodes it commissioned, the
+  newest that applies to each, and serves them over BDX, on rs-matter's OTA
+  Provider cluster. `Controller::announce_ota` (MQTT `ota_update`) tells a
+  node to ask now; `ota_images` lists the images; `Event::Ota` (bridge event
+  `ota`) follows each update. CI updates connectedhomeip's
+  `chip-ota-requestor-app` with it.
+
 ## [0.1.0] - 2026-11-20
 
 ### Added

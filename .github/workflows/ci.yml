@@ -8,9 +8,10 @@
 # mipsel is a tier 3 target: no prebuilt std, so it builds std itself on a
 # pinned nightly (-Zbuild-std) and links against zig's musl.
 #
-# The device is connectedhomeip's chip-all-clusters-app from the CSA's
-# chip-cert-bins image (the apps certification testing uses), on a
-# GitHub-hosted arm64 runner because the image is arm64 only.
+# The devices are connectedhomeip's chip-all-clusters-app, then its
+# chip-ota-requestor-app for a software update, from the CSA's chip-cert-bins
+# image (the apps certification testing uses), on a GitHub-hosted arm64
+# runner because the image is arm64 only.
 
 name: ci
 on:
@@ -71,8 +72,10 @@ jobs:
       - name: Pull the device image
         timeout-minutes: 15
         run: docker pull -q "${CHIP_CERT_BINS}"
-      - name: Build the test
-        run: cargo test -p matter-bridge --test e2e --no-run
+      - name: Build the tests
+        run: |
+          cargo test -p matter-bridge --test e2e --no-run
+          cargo test -p matter-controller --test ota --no-run
       - name: Start chip-all-clusters-app
         run: |
           docker run -d --name dut --network host "${CHIP_CERT_BINS}" \
@@ -87,6 +90,23 @@ jobs:
       - name: Device log
         if: always()
         run: docker logs dut 2>&1 | tail -300
+      - name: Start chip-ota-requestor-app
+        if: always()
+        run: |
+          docker rm -f dut
+          mkdir -p /tmp/ota && chmod 777 /tmp/ota
+          docker run -d --name requestor --network host -v /tmp/ota:/tmp/ota "${CHIP_CERT_BINS}" \
+            /root/chip-ota-requestor-app --KVS /tmp/requestor.kvs --otaDownloadPath /tmp/ota/downloaded.ota
+          sleep 3
+          docker ps -a
+      - name: Software update over OTA, the controller as provider
+        if: always()
+        env:
+          RUST_LOG: info,matter_controller=debug,rs_matter_bdx=debug
+        run: cargo test -p matter-controller --test ota -- --ignored --nocapture
+      - name: Requestor log
+        if: always()
+        run: docker logs requestor 2>&1 | tail -300
 
   ble:
     runs-on: ubuntu-latest

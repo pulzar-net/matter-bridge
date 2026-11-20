@@ -312,6 +312,16 @@ impl Bridge {
                 )
                 .await;
             }
+            Event::Ota {
+                node,
+                step,
+                version,
+            } => {
+                self.publish_bridge_event(
+                    &json!({"type": "ota", "node": node, "step": step, "version": version}),
+                )
+                .await;
+            }
         }
     }
 
@@ -681,6 +691,15 @@ async fn request(
                 .unwrap_or(5);
             let found = controller.discover(seconds).await.map_err(e)?;
             Ok(serde_json::to_value(found).unwrap_or_default())
+        }
+        "ota_images" => {
+            let images = controller.ota_images().map_err(e)?;
+            Ok(serde_json::to_value(images).unwrap_or_default())
+        }
+        "ota_update" => {
+            let node = node_of(names, body)?;
+            let image = controller.announce_ota(node).await.map_err(e)?;
+            Ok(serde_json::to_value(image).unwrap_or_default())
         }
         "devices" => {
             let nodes = controller.nodes().await.map_err(e)?;

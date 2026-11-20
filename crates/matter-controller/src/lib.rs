@@ -11,6 +11,7 @@ mod identity;
 mod mdns;
 pub mod network;
 pub mod onboarding;
+pub mod ota;
 mod reports;
 pub mod store;
 pub mod x509;
@@ -27,6 +28,7 @@ pub use ca::{
 };
 pub use controller::Controller;
 pub use onboarding::{Discriminator, Onboarding};
+pub use ota::OtaImage;
 pub use reports::decode_report_data;
 pub use store::{BasicInfo, DeviceType, Endpoint, Node, NodeStore};
 
@@ -120,13 +122,18 @@ pub struct Config {
     /// The longest a subscription may stay silent before it is renewed,
     /// seconds (the device may agree to less).
     pub max_report_interval: u16,
+    /// The directory of Matter OTA image files offered to the nodes; the
+    /// newest that applies to a node is the update it is offered.
+    pub ota_dir: PathBuf,
 }
 
 impl Config {
     /// Defaults for a controller keeping its state in `state_dir`.
     pub fn new(state_dir: impl Into<PathBuf>) -> Self {
+        let state_dir: PathBuf = state_dir.into();
         Self {
-            state_dir: state_dir.into(),
+            ota_dir: state_dir.join("ota"),
+            state_dir,
             port: 5541,
             interface: None,
             fabric_id: None,
@@ -312,6 +319,28 @@ pub enum Event {
         /// Whether it is reachable.
         online: bool,
     },
+    /// A step of a node's software update from this controller.
+    Ota {
+        /// The node.
+        node: u64,
+        /// The step.
+        step: OtaStep,
+        /// The version offered, being applied, or now running.
+        version: u32,
+    },
+}
+
+/// A step of a software update, as the controller (its OTA provider) sees
+/// it. The node's own OTA Requestor events tell the download's progress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OtaStep {
+    /// The node asked for an update and was offered `version`.
+    Offered,
+    /// The node downloaded it and was told to apply it.
+    Applying,
+    /// The node reports it now runs `version`.
+    Applied,
 }
 
 /// A node advertising itself as commissionable.
