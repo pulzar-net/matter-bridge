@@ -1,0 +1,99 @@
+# Static musl binaries of the bridge, on a version tag.
+#
+#   aarch64-unknown-linux-musl   Raspberry Pi 3, 4 and 5 class boards
+#   mipsel-unknown-linux-musl    MT7621/MT7628 class routers
+#   x86_64-unknown-linux-musl    PCs and servers
+#
+# The tag must equal the workspace version. Every target's tests run under
+# qemu before anything is published; the release carries the binaries and
+# SHA256SUMS, with the tag's CHANGELOG.md section as a starting point for
+# the notes.
+
+name: release
+on:
+  push:
+    tags: ['v*']
+  # Builds an existing tag again (when a release failed for a reason
+  # outside the tagged code).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag to build and release
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NIGHTLY: nightly-2026-11-14
+  ZIG: 0.16.0
+  ZIGBUILD: 0.24.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: The tag is the crate version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          want="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          [ "${TAG#v}" = "${want}" ] || { echo "tag ${TAG} is not v${want}" >&2; exit 1; }
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.NIGHTLY }}
+          components: rust-src
+          targets: aarch64-unknown-linux-musl,x86_64-unknown-linux-musl
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild@${{ env.ZIGBUILD }}
+      - name: qemu-user
+        run: sudo apt-get update -q && sudo apt-get install -y -q qemu-user
+      - name: Test and build
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER: qemu-aarch64
+          CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_RUNNER: qemu-mipsel
+          CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_RUSTFLAGS: -C target-feature=+crt-static -C link-self-contained=no
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUNNER: env
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in x86_64-unknown-linux-musl aarch64-unknown-linux-musl mipsel-unknown-linux-musl; do
+            echo "::group::${target}"
+            std=()
+            case "${target}" in mips*) std=(-Zbuild-std) ;; esac
+            cargo-zigbuild test --workspace --target "${target}" "${std[@]}"
+            case "${target}" in mips*) std=(-Zbuild-std=std,panic_abort) ;; esac
+            cargo zigbuild --release --locked --bin matter-bridge --target "${target}" "${std[@]}"
+            bin="target/${target}/release/matter-bridge"
+            file "${bin}" | grep -q 'statically linked' || { file "${bin}"; echo "${target}: not static" >&2; exit 1; }
+            runner="CARGO_TARGET_$(echo "${target}" | tr 'a-z-' 'A-Z_')_RUNNER"
+            "${!runner}" "${bin}" --version
+            "${!runner}" "${bin}" parse 3497-011-2332
+            cp "${bin}" "dist/matter-bridge-${target%%-*}-linux-musl"
+            echo "::endgroup::"
+          done
+          (cd dist && sha256sum matter-bridge-* > SHA256SUMS && cat SHA256SUMS)
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          awk -v v="${version}" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "no changelog section for ${version}" >&2; exit 1; }
+          gh release create "${TAG}" dist/* --title "${TAG}" --notes-file notes.md --verify-tag

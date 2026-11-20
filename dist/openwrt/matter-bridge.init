@@ -1,0 +1,29 @@
+#!/bin/sh /etc/rc.common
+# matter-bridge on OpenWrt (procd).
+#
+#   cp matter-bridge.init /etc/init.d/matter-bridge
+#   chmod +x /etc/init.d/matter-bridge
+#   /etc/init.d/matter-bridge enable
+#   /etc/init.d/matter-bridge start
+#
+# /var is in RAM on OpenWrt: set [data] dir to a directory on flash, such as
+# /etc/matter-bridge/data, or the fabric's keys are lost at reboot, orphaning every device.
+
+START=95
+STOP=10
+USE_PROCD=1
+
+PROG=/usr/bin/matter-bridge
+CONFIG=/etc/matter-bridge/config.toml
+
+start_service() {
+	procd_open_instance
+	procd_set_param command "$PROG" --config "$CONFIG"
+	procd_set_param env RUST_LOG=info
+	procd_set_param file "$CONFIG"
+	# Restart forever, 5 s apart.
+	procd_set_param respawn 3600 5 0
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}

@@ -5,7 +5,7 @@ does not have yet, and how the next pieces fit.
 
 ## Layers
 
-```
+```text
  MQTT  ◄──────────────►  matter-bridge (binary)
                           topics, requests, Home Assistant discovery
                                │  Controller handle (Send + Clone, async)
@@ -73,9 +73,8 @@ controller's own NOC is issued through it at first start and kept in
 ## Upstream work (rs-matter)
 
 What matter-bridge needs that rs-matter lacks. Each goes to rs-matter as its
-own change, from its own session, and is submitted only with the owner's
-go-ahead; until it merges, matter-bridge either works around it (named in a
-comment that links the upstream PR) or depends on the fork's branch.
+own change; until it merges, matter-bridge either works around it (named in a
+comment that links the upstream change) or depends on a branch with it.
 
 1. **Device attestation verification** (security; blocks production use).
    `Commissioner` has a `DeviceAttestation` step that either skips
@@ -105,8 +104,7 @@ comment that links the upstream PR) or depends on the fork's branch.
    generic invoke, but the ordering inside the fail-safe belongs in the
    commissioner.
 
-Anything found while building on rs-matter joins this list and gets its own
-session.
+Anything else found while building on rs-matter joins this list.
 
 ## Commissioning over Bluetooth and Thread
 
@@ -190,7 +188,7 @@ the Matter logo, or that a commercial ecosystem treats as certified, does:
   bridge is a device and needs all of it.
 - **Thread.** A Thread border router product is certified separately by the
   Thread Group (its own membership).
-- **Our code.** A certified product must pass the test cases for what it
+- **This project.** A certified product must pass the test cases for what it
   claims (the CSA's test harness runs them). For a controller that means the
   commissioner cases, device attestation verification first among them, which
   is why upstream item 1 comes first.

@@ -1,0 +1,59 @@
+# matter-bridge as a systemd service.
+#
+#   sudo install -m 0644 matter-bridge.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now matter-bridge
+#
+# The bridge runs as an unprivileged dynamic user. Its data directory, which
+# holds the fabric's CA keys, is /var/lib/matter-bridge (StateDirectory); its
+# configuration is /etc/matter-bridge/config.toml.
+
+[Unit]
+Description=Matter to MQTT bridge
+Documentation=https://pulzar-net.github.io/matter-bridge/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/matter-bridge --config /etc/matter-bridge/config.toml
+# Any failure restarts it.
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+DynamicUser=yes
+# Bluetooth commissioning (matter.bluetooth = "hci0") needs CAP_NET_ADMIN:
+# uncomment this line, set CapabilityBoundingSet=CAP_NET_ADMIN below, and add
+# AF_BLUETOOTH to RestrictAddressFamilies.
+#AmbientCapabilities=CAP_NET_ADMIN
+StateDirectory=matter-bridge
+StateDirectoryMode=0700
+# The MQTT password, if the broker needs one: keep the file readable by root
+# only and point mqtt.password_file at
+# /run/credentials/matter-bridge.service/mqtt-password.
+#LoadCredential=mqtt-password:/etc/matter-bridge/mqtt-password
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
