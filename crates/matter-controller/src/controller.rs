@@ -67,6 +67,7 @@ const OPERATIONAL_CREDENTIALS: u32 = 0x003E;
 const ADMINISTRATOR_COMMISSIONING: u32 = 0x003C;
 const GROUPS: u32 = 0x0004;
 const GROUP_KEY_MANAGEMENT: u32 = 0x003F;
+const GROUPCAST: u32 = 0x0065;
 const NETWORK_COMMISSIONING: u32 = 0x0031;
 const ADD_WIFI_NETWORK: u32 = 0x02;
 const ADD_THREAD_NETWORK: u32 = 0x03;
@@ -1443,6 +1444,16 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         Ok(())
     }
 
+    /// Whether `node` manages its groups with the Groupcast cluster (Matter
+    /// 1.6), rather than the Groups cluster and the group key map.
+    fn uses_groupcast(&self, node: u64) -> Result<bool, Error> {
+        Ok(self
+            .known(node)?
+            .endpoints
+            .get(&ROOT_ENDPOINT)
+            .is_some_and(|ep| ep.server_clusters.contains(&GROUPCAST)))
+    }
+
     async fn add_to_group(
         &self,
         node: u64,
@@ -1450,7 +1461,6 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         group: u16,
         name: &str,
     ) -> Result<(), Error> {
-        self.known(node)?;
         if group == 0 {
             return Err(Error::Invalid("group 0 is not a group".into()));
         }
@@ -1459,6 +1469,52 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             (g.key_set_id, g.epoch_key, g.epoch_start_time)
         };
 
+        if self.uses_groupcast(node)? {
+            // One command: the group, the endpoint and the key set with its
+            // key; the node listens on the group's own multicast address.
+            self.invoke(
+                node,
+                ROOT_ENDPOINT,
+                GROUPCAST,
+                0x00, // JoinGroup
+                &json!({
+                    "groupID": group,
+                    "endpoints": [endpoint],
+                    "keySetID": key_set,
+                    "key": hex::encode(epoch_key),
+                    "mcastAddrPolicy": 1, // per group
+                }),
+                None,
+            )
+            .await?;
+        } else {
+            self.join_group_legacy(node, endpoint, group, name, key_set, epoch_key, start)
+                .await?;
+        }
+
+        self.groups
+            .borrow_mut()
+            .add(group, &self.config.state_dir.join("groups.json"))?;
+        self.matter.with_state(|state| {
+            let fabric = state.fabrics.fabric_mut(self.fab_idx)?;
+            fabric.groups_mut().key_map_set_group(group, key_set)
+        })?;
+        Ok(())
+    }
+
+    /// A node from before Groupcast: the key set, the group key map, and
+    /// the Groups cluster.
+    #[allow(clippy::too_many_arguments)]
+    async fn join_group_legacy(
+        &self,
+        node: u64,
+        endpoint: u16,
+        group: u16,
+        name: &str,
+        key_set: u16,
+        epoch_key: [u8; 16],
+        start: u64,
+    ) -> Result<(), Error> {
         // The fabric's group key set...
         self.invoke(
             node,
@@ -1519,22 +1575,24 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             )
             .await?;
         match response.get("status").and_then(Value::as_u64) {
-            Some(0) | None => {}
-            Some(status) => return Err(Error::Status(format!("AddGroup: status {status:#04x}"))),
+            Some(0) | None => Ok(()),
+            Some(status) => Err(Error::Status(format!("AddGroup: status {status:#04x}"))),
         }
-
-        self.groups
-            .borrow_mut()
-            .add(group, &self.config.state_dir.join("groups.json"))?;
-        self.matter.with_state(|state| {
-            let fabric = state.fabrics.fabric_mut(self.fab_idx)?;
-            fabric.groups_mut().key_map_set_group(group, key_set)
-        })?;
-        Ok(())
     }
 
     async fn remove_from_group(&self, node: u64, endpoint: u16, group: u16) -> Result<(), Error> {
-        self.known(node)?;
+        if self.uses_groupcast(node)? {
+            self.invoke(
+                node,
+                ROOT_ENDPOINT,
+                GROUPCAST,
+                0x01, // LeaveGroup
+                &json!({ "groupID": group, "endpoints": [endpoint] }),
+                None,
+            )
+            .await?;
+            return Ok(());
+        }
         let response = self
             .invoke(node, endpoint, GROUPS, 0x03, &json!({ "0": group }), None)
             .await?;

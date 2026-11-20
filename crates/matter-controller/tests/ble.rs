@@ -25,13 +25,18 @@ use matter_controller::{AttributePath, CommissionRequest, Config, Controller, Ne
 use rs_matter::crypto::{default_crypto, Crypto as _};
 use rs_matter::dm::clusters::app::on_off::{self, test::TestOnOffDeviceLogic, OnOffHooks as _};
 use rs_matter::dm::clusters::desc::{self, ClusterHandler as _};
-use rs_matter::dm::clusters::net_comm::NetworkType;
+use rs_matter::dm::clusters::net_comm::{
+    NetCtl, NetCtlError, NetCtlStatus, NetworkCommissioningStatusEnum, NetworkScanInfo,
+    NetworkType, WirelessCreds,
+};
+use rs_matter::dm::clusters::wifi_diag::{WifiDiag, WirelessDiag};
 use rs_matter::dm::devices::test::{
     DAC_PRIVKEY, TEST_BASIC_COMM, TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET, TEST_PID, TEST_VID,
 };
 use rs_matter::dm::devices::DEV_TYPE_ON_OFF_LIGHT;
 use rs_matter::dm::endpoints::ROOT_ENDPOINT_ID;
-use rs_matter::dm::networks::wireless::{NoopWirelessNetCtl, WifiNetworks};
+use rs_matter::dm::networks::wireless::WifiNetworks;
+use rs_matter::dm::networks::NetChangeNotif;
 use rs_matter::dm::networks::SysNetifs;
 use rs_matter::dm::{Async, DataModel, Dataver, EmptyHandler, Endpoint, Node};
 use rs_matter::error::{Error as MatterError, ErrorCode};
@@ -168,6 +173,69 @@ impl GattPeripheral for HostGatt {
     }
 }
 
+/// The device's Wi-Fi control: it stays on the network the host is on, and
+/// once told to connect it says it is connected. (rs-matter's
+/// `NoopWirelessNetCtl` never reports a connection, so its network manager
+/// tries to connect again at once, forever.)
+#[derive(Default)]
+struct HostWifi {
+    network: std::sync::Mutex<Option<Vec<u8>>>,
+}
+
+impl NetCtl for HostWifi {
+    fn net_type(&self) -> NetworkType {
+        NetworkType::Wifi
+    }
+
+    async fn scan<F>(&self, _network: Option<&[u8]>, _f: F) -> Result<(), NetCtlError>
+    where
+        F: FnMut(&NetworkScanInfo) -> Result<(), MatterError> + rs_matter::utils::sync::MaybeSend,
+    {
+        Err(NetCtlError::Other(ErrorCode::InvalidAction.into()))
+    }
+
+    async fn connect(&self, creds: &WirelessCreds<'_>) -> Result<(), NetCtlError> {
+        NetworkType::Wifi.check_creds(creds)?;
+        if let WirelessCreds::Wifi { ssid, .. } = creds {
+            *self.network.lock().unwrap() = Some(ssid.to_vec());
+        }
+        Ok(())
+    }
+}
+
+impl NetChangeNotif for HostWifi {
+    async fn wait_changed(&self) {
+        core::future::pending().await
+    }
+}
+
+impl NetCtlStatus for HostWifi {
+    fn last_networking_status(
+        &self,
+    ) -> Result<Option<NetworkCommissioningStatusEnum>, MatterError> {
+        Ok(None)
+    }
+
+    fn last_network_id<F, R>(&self, f: F) -> Result<R, MatterError>
+    where
+        F: FnOnce(Option<&[u8]>) -> Result<R, MatterError>,
+    {
+        f(self.network.lock().unwrap().as_deref())
+    }
+
+    fn last_connect_error_value(&self) -> Result<Option<i32>, MatterError> {
+        Ok(None)
+    }
+}
+
+impl WirelessDiag for HostWifi {
+    fn connected(&self) -> Result<bool, MatterError> {
+        Ok(self.network.lock().unwrap().is_some())
+    }
+}
+
+impl WifiDiag for HostWifi {}
+
 const NODE: Node<'static> = Node {
     endpoints: &[
         root_endpoint!(wifi),
@@ -247,7 +315,7 @@ fn start_device(bt_port: u16, kv_dir: std::path::PathBuf) {
                     PreexistingWireless::new(
                         StdNetStack::new(),
                         SysNetifs,
-                        NoopWirelessNetCtl::new(NetworkType::Wifi),
+                        HostWifi::default(),
                         BuiltinMdns::new(),
                         HostGatt(host),
                     ),
