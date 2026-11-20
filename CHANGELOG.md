@@ -22,6 +22,13 @@ All notable changes are listed here. The project follows
   asleep wait for its next Check-In. CI checks it with connectedhomeip's
   `lit-icd-app`.
 
+### Fixed
+
+- The controller's mDNS advertised no link-local IPv6 address (the
+  interface listing dropped them), so a device on a network with only
+  link-local IPv6 could not find the controller on its own, as for a
+  Check-In.
+
 ## [0.1.0] - 2026-11-20
 
 ### Added
