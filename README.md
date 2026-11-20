@@ -45,12 +45,13 @@ Expect rough edges and breaking changes between 0.x releases.
 | A subscription to every device, renewed when it lapses | done in 0.1.0 |
 | Multi-admin: open a commissioning window for another ecosystem | done in 0.1.0 |
 | Home Assistant MQTT discovery for lights, switches, sensors | done in 0.1.0 |
-| Commissioning over Bluetooth LE, giving the device Wi-Fi credentials | built in 0.1.0, not yet passing its simulated end-to-end test |
-| Giving a Thread device the border router's dataset | built in 0.1.0, untested with a real Thread device |
+| Commissioning over Bluetooth LE, giving the device Wi-Fi credentials | done in 0.1.0, tested on simulated controllers |
+| Giving a Thread device the border router's dataset | done in 0.1.0, tested up to the request it sends (no Thread device in CI) |
+| Groups: one multicast command to many endpoints | done in 0.1.0 |
 | Device attestation verification | in progress (blocks production use) |
 | An intermediate CA under a root held elsewhere | done in 0.1.0 |
 | More than 64 live nodes | in progress |
-| OTA, groups, sleepy (ICD) devices | planned |
+| OTA, sleepy (ICD) devices | planned |
 | Exposing other devices as a Matter bridge | planned |
 
 ## Supported devices
@@ -64,7 +65,7 @@ bridge is on works through the clusters it serves.
 | connectedhomeip's `chip-all-clusters-app` (reference device) | commission over IP | tested in CI on every commit |
 | Matter devices on Ethernet, or already on your Wi-Fi or Thread network | commission over IP with their pairing code | expected |
 | Devices already in Apple Home, Google Home, Home Assistant or another ecosystem | ask that app for a pairing code ("share" or "turn on pairing mode"), then commission over IP | expected |
-| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE, with the network's credentials | built, not yet tested end to end |
+| New Wi-Fi or Thread devices that join over Bluetooth | commission over Bluetooth LE, with the network's credentials | expected (Wi-Fi tested on simulated controllers) |
 
 Home Assistant discovery covers lights (On/Off, with brightness from Level
 Control), switches and plugs, temperature, humidity, pressure and
@@ -178,7 +179,7 @@ attribute is its number in hex (`0xfff1fc01`).
 | `matter/bridge/info` | out, retained | version, fabric id, compressed fabric id, the controller's node id |
 | `matter/bridge/devices` | out, retained | every node: vendor, product, endpoints, device types, clusters |
 | `matter/bridge/event` | out | commissioning steps, node updates and removals, availability |
-| `matter/bridge/request/<name>` | in | `commission`, `open_commissioning_window`, `read`, `write`, `invoke`, `interview`, `rename`, `remove`, `discover`, `devices` |
+| `matter/bridge/request/<name>` | in | `commission`, `open_commissioning_window`, `read`, `write`, `invoke`, `add_to_group`, `remove_from_group`, `group_invoke`, `interview`, `rename`, `remove`, `discover`, `devices` |
 | `matter/bridge/response/<name>` | out | `{"status":"ok","data":...}` or `{"status":"error","error":"..."}`, with the request's `transaction` |
 | `matter/<device>/availability` | out, retained | `online` while its subscription holds, else `offline` |
 | `matter/<device>/<endpoint>/<cluster>/<attribute>` | out, retained | the attribute's value, JSON |
@@ -272,7 +273,7 @@ can accept 0.x maturity and, for now, unverified attestation.
 - **Next:** testing Bluetooth and Thread commissioning on real devices.
 - **In progress:** device attestation verification, more than 64 live
   nodes.
-- **Later:** OTA, groups, sleepy (ICD) devices, exposing other devices as a
+- **Later:** OTA, sleepy (ICD) devices, exposing other devices as a
   Matter bridge.
 
 The [design page](https://pulzar-net.github.io/matter-bridge/design.html)

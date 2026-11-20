@@ -134,6 +134,9 @@ Every request takes an optional `transaction`, copied into the response.
 | `read` | `device`, optional `endpoint`, `cluster`, `attribute` (any left out: all of them) | a list of `endpoint`, `cluster`, `attribute`, `value`, `status` |
 | `write` | `device`, `endpoint`, `cluster`, `attribute`, `value`, optional `timed` (ms) | `null` |
 | `invoke` | `device`, `endpoint`, `cluster`, `command`, optional `fields`, `timed` (ms) | the response's fields |
+| `add_to_group` | `device`, `endpoint`, `group` (1 to 65535), optional `name` | `null` |
+| `remove_from_group` | `device`, `endpoint`, `group` | `null` |
+| `group_invoke` | `group`, `cluster`, `command`, optional `fields` | `null` |
 | `interview` | `device` | the node |
 | `rename` | `device`, `to` | the node |
 | `remove` | `device`, optional `force` | `node` |
@@ -142,6 +145,22 @@ Every request takes an optional `transaction`, copied into the response.
 
 `timed` sends the write or command as a timed interaction, which some
 clusters require (door locks, for example).
+
+### Groups
+
+`add_to_group` gives a node the fabric's group key and puts one of its
+endpoints in a group, with access for the group to operate it (Groupcast on
+Matter 1.6 nodes; Groups and Group Key Management on older ones).
+`group_invoke` then sends one multicast command to every member, for
+example to switch a room's lights together:
+
+```sh
+mosquitto_pub -t matter/bridge/request/add_to_group -m '{"device": "lamp", "endpoint": 1, "group": 7, "name": "living room"}'
+mosquitto_pub -t matter/bridge/request/group_invoke -m '{"group": 7, "cluster": "on_off", "command": "toggle"}'
+```
+
+Group commands are not acknowledged; each member's new state comes back
+through its subscription.
 
 ## Home Assistant topics
 

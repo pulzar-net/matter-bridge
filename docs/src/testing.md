@@ -27,6 +27,7 @@ the CSA's `chip-cert-bins` image, on an arm64 runner) and runs
 - checks Home Assistant discovery;
 - reads, writes, and invokes a command whose effect comes back through the
   subscription, and one with a typed response;
+- puts an endpoint in a group and toggles it with one multicast command;
 - opens a commissioning window, through which a second controller on its own
   fabric commissions the device too.
 
@@ -42,8 +43,11 @@ commissioning with the README's own commands.
 
 ## Bluetooth commissioning
 
-`crates/matter-controller/tests/ble.rs` commissions over Bluetooth LE
-between two virtual controllers from Bumble. It does not pass yet.
+`crates/matter-controller/tests/ble.rs` commissions a Wi-Fi device over
+Bluetooth LE between two virtual controllers from Bumble on every commit:
+found by its advertisement, PASE over BLE, Wi-Fi credentials given, CASE
+over IP. Thread commissioning is tested up to the request that hands the
+dataset over; CI has no Thread device.
 
 ## Fuzzing
 
