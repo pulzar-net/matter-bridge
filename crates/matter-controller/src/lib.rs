@@ -1,22 +1,4 @@
-//! A Matter controller on [rs-matter](https://github.com/project-chip/rs-matter).
-//!
-//! - **Onboarding**: QR codes and manual pairing codes ([`Onboarding`]).
-//! - **Commissioning over IP**: the device is found by DNS-SD among
-//!   commissionable nodes, or reached at an address given, then taken through
-//!   PASE, the fail-safe, CSR, AddNOC, CASE and `CommissioningComplete` by
-//!   rs-matter's commissioner.
-//! - **A fabric with a pluggable CA** ([`CertificateAuthority`]); [`FileCa`]
-//!   for a standalone controller.
-//! - **Multi-admin**: [`Controller::open_commissioning_window`] lets a second
-//!   ecosystem (Apple Home, Google Home, Home Assistant) commission the node too.
-//! - **The interaction model**: read, write and invoke on any cluster, in JSON
-//!   converted by [`matter_model`] from the CSA's published data model, and a
-//!   subscription to every node that is re-established when it lapses, with
-//!   attribute changes and events delivered as [`Event`]s.
-//! - **A node store** ([`NodeStore`]) written when the network changes.
-//!
-//! rs-matter's futures are not `Send`, so the controller runs on a thread of
-//! its own; [`Controller`] is the `Send + Clone` handle to it.
+#![doc = include_str!("../README.md")]
 
 #![allow(async_fn_in_trait)]
 
@@ -38,7 +20,10 @@ use std::path::PathBuf;
 use serde::Serialize;
 use serde_json::Value;
 
-pub use ca::{CertificateAuthority, FileCa, IntermediateCa, Issued, NodeIdRange};
+pub use ca::{
+    install_intermediate, intermediate_csr, intermediate_path, CertificateAuthority, FileCa,
+    IntermediateCa, Issued, NodeIdRange,
+};
 pub use controller::Controller;
 pub use onboarding::{Discriminator, Onboarding};
 pub use reports::decode_report_data;
@@ -158,7 +143,7 @@ pub enum CaChoice {
     #[default]
     File,
     /// An intermediate under a root CA elsewhere, installed in
-    /// `intermediate.json` with [`ca::IntermediateCa::install`].
+    /// `intermediate.json` with [`install_intermediate`].
     Intermediate,
 }
 

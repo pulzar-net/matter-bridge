@@ -120,6 +120,7 @@ enum Job {
     Interview(u64, Reply<Node>),
     Discover(u16, Reply<Vec<Commissionable>>),
     Nodes(Reply<Vec<Node>>),
+    Abort(Reply<bool>),
 }
 
 impl Controller {
@@ -251,6 +252,12 @@ impl Controller {
         self.call(|r| Job::Discover(seconds, r)).await
     }
 
+    /// Stop the commissioning in progress, rolling the device back;
+    /// whether one was running.
+    pub async fn abort_commissioning(&self) -> Result<bool, Error> {
+        self.call(Job::Abort).await
+    }
+
     /// Every node in the store.
     pub async fn nodes(&self) -> Result<Vec<Node>, Error> {
         self.call(Job::Nodes).await
@@ -311,6 +318,7 @@ struct Ctx<C: 'static> {
     subs: Rc<Subscriptions>,
     tasks: RefCell<HashMap<u64, tokio::task::JoinHandle<()>>>,
     commissioning: tokio::sync::Mutex<()>,
+    abort: tokio::sync::Notify,
     #[cfg(feature = "ble")]
     ble: Option<crate::ble::Ble>,
 }
@@ -463,6 +471,7 @@ async fn run(
         subs,
         tasks: RefCell::new(HashMap::new()),
         commissioning: tokio::sync::Mutex::new(()),
+        abort: tokio::sync::Notify::new(),
         #[cfg(feature = "ble")]
         ble,
     });
@@ -589,6 +598,7 @@ fn now_secs() -> u64 {
 struct Hooks<'a> {
     node: u64,
     events: &'a EventBus,
+    abort: &'a tokio::sync::Notify,
 }
 
 impl Hooks<'_> {
@@ -618,6 +628,10 @@ impl CommissionHooks for Hooks<'_> {
             node: self.node,
             step,
         });
+    }
+
+    async fn cancelled(&self) {
+        self.abort.notified().await
     }
 }
 
@@ -654,6 +668,15 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
             Job::Nodes(r) => {
                 let _ = r.send(Ok(self.store.borrow().nodes().cloned().collect()));
             }
+            Job::Abort(r) => {
+                // A commissioning holds the lock; with none running there is
+                // nothing to stop.
+                let running = self.commissioning.try_lock().is_err();
+                if running {
+                    self.abort.notify_waiters();
+                }
+                let _ = r.send(Ok(running));
+            }
         }
     }
 
@@ -680,6 +703,7 @@ impl<C: Crypto + Copy + 'static> Ctx<C> {
         let hooks = Hooks {
             node: node_id,
             events: &self.events,
+            abort: &self.abort,
         };
         self.events.send(Event::Commissioning {
             node: node_id,

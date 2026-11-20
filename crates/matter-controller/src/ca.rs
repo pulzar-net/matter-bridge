@@ -478,6 +478,37 @@ impl CertificateAuthority for IntermediateCa {
     }
 }
 
+/// [`IntermediateCa::csr`] for the controller whose state is in
+/// `state_dir` (where [`crate::CaChoice::Intermediate`] looks), with this
+/// crate's crypto.
+pub fn intermediate_csr(state_dir: &Path) -> Result<Vec<u8>, Error> {
+    let seed: [u8; SECRET_KEY_LEN] = rand::random();
+    let crypto = rs_matter::crypto::default_crypto(rand::rng(), CanonPkcSecretKeyRef::new(&seed));
+    IntermediateCa::csr(&intermediate_path(state_dir), &crypto)
+}
+
+/// Where a controller keeps its intermediate CA.
+pub fn intermediate_path(state_dir: &Path) -> PathBuf {
+    state_dir.join("intermediate.json")
+}
+
+/// Install (or replace) what a root CA issued for the controller in
+/// `state_dir`. With no new key waiting (no CSR since the last install), only
+/// a further node id range is taken.
+pub fn install_intermediate(state_dir: &Path, issued: Issued) -> Result<(), Error> {
+    let path = intermediate_path(state_dir);
+    if IntermediateCa::pending_path(&path).exists() || !path.exists() {
+        return IntermediateCa::install(&path, issued);
+    }
+    let ca = IntermediateCa::open(&path)?;
+    if ca.fabric_id() != issued.fabric_id {
+        return Err(Error::Invalid(
+            "another fabric's credentials: ask for a new CSR first".into(),
+        ));
+    }
+    ca.extend_node_ids(issued.node_ids)
+}
+
 /// The CA a controller runs with.
 pub enum AnyCa {
     /// A standalone fabric.
