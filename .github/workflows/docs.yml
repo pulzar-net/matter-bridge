@@ -118,7 +118,7 @@ jobs:
             case "$p" in */) p="${p}index.html" ;; esac
             test -e "docs/dist/$p" || { echo "::error::broken API link: /matter-bridge/$p"; exit 1; }
           done < "$RUNNER_TEMP/api-links"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/dist
 
