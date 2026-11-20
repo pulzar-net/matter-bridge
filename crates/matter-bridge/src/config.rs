@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 /// The whole configuration.
 #[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// The MQTT broker.
@@ -32,6 +33,7 @@ impl Config {
 
 /// The MQTT broker.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, schemars::JsonSchema))]
 #[serde(deny_unknown_fields, default)]
 pub struct MqttConfig {
     /// Broker host.
@@ -66,6 +68,7 @@ impl Default for MqttConfig {
 
 /// Home Assistant discovery.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, schemars::JsonSchema))]
 #[serde(deny_unknown_fields, default)]
 pub struct HomeAssistantConfig {
     /// Publish discovery messages.
@@ -88,6 +91,7 @@ impl Default for HomeAssistantConfig {
 
 /// The Matter controller.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, schemars::JsonSchema))]
 #[serde(deny_unknown_fields, default)]
 pub struct MatterConfig {
     /// UDP port for Matter.
@@ -134,6 +138,7 @@ impl Default for MatterConfig {
 
 /// Where state lives.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, schemars::JsonSchema))]
 #[serde(deny_unknown_fields, default)]
 pub struct DataConfig {
     /// The directory for the fabric, the controller's identity and the node

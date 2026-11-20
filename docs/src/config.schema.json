@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "description": "The whole configuration.",
+  "type": "object",
+  "properties": {
+    "mqtt": {
+      "description": "The MQTT broker.",
+      "$ref": "#/$defs/MqttConfig",
+      "default": {
+        "host": "localhost",
+        "port": 1883,
+        "username": null,
+        "password_file": null,
+        "client_id": "matter-bridge",
+        "base_topic": "matter",
+        "keepalive": 30
+      }
+    },
+    "homeassistant": {
+      "description": "Home Assistant discovery.",
+      "$ref": "#/$defs/HomeAssistantConfig",
+      "default": {
+        "enabled": true,
+        "discovery_prefix": "homeassistant",
+        "status_topic": "homeassistant/status"
+      }
+    },
+    "matter": {
+      "description": "The Matter controller.",
+      "$ref": "#/$defs/MatterConfig",
+      "default": {
+        "port": 5541,
+        "interface": null,
+        "fabric_id": null,
+        "vendor_id": 65521,
+        "allow_unverified_attestation": true,
+        "max_report_interval": 60,
+        "discovery_timeout": 30,
+        "bluetooth": null,
+        "thread_dataset_url": null
+      }
+    },
+    "data": {
+      "description": "Where state lives.",
+      "$ref": "#/$defs/DataConfig",
+      "default": {
+        "dir": "/var/lib/matter-bridge"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "MqttConfig": {
+      "description": "The MQTT broker.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Broker host.",
+          "type": "string",
+          "default": "localhost"
+        },
+        "port": {
+          "description": "Broker port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 1883
+        },
+        "username": {
+          "description": "User name, if the broker wants one.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "password_file": {
+          "description": "A file holding the password (so it is not in the configuration).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "client_id": {
+          "description": "Client id.",
+          "type": "string",
+          "default": "matter-bridge"
+        },
+        "base_topic": {
+          "description": "Prefix of every topic the bridge uses.",
+          "type": "string",
+          "default": "matter"
+        },
+        "keepalive": {
+          "description": "Keep-alive, seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 30
+        }
+      },
+      "additionalProperties": false
+    },
+    "HomeAssistantConfig": {
+      "description": "Home Assistant discovery.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Publish discovery messages.",
+          "type": "boolean",
+          "default": true
+        },
+        "discovery_prefix": {
+          "description": "Home Assistant's discovery prefix.",
+          "type": "string",
+          "default": "homeassistant"
+        },
+        "status_topic": {
+          "description": "Home Assistant's birth topic; discovery is re-sent when it says \"online\".",
+          "type": "string",
+          "default": "homeassistant/status"
+        }
+      },
+      "additionalProperties": false
+    },
+    "MatterConfig": {
+      "description": "The Matter controller.",
+      "type": "object",
+      "properties": {
+        "port": {
+          "description": "UDP port for Matter.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 5541
+        },
+        "interface": {
+          "description": "Network interface for mDNS; the first with IPv6 if unset.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "fabric_id": {
+          "description": "Fabric id of a new fabric (random if unset). Ignored once the fabric\nexists.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "default": null
+        },
+        "vendor_id": {
+          "description": "Vendor id the controller administers nodes as.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 65521
+        },
+        "allow_unverified_attestation": {
+          "description": "Commission devices whose attestation is not verified. Required for\nnow: verification is not implemented yet (see the README).",
+          "type": "boolean",
+          "default": true
+        },
+        "max_report_interval": {
+          "description": "Longest silence before a subscription is renewed, seconds.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 60
+        },
+        "discovery_timeout": {
+          "description": "How long to look for a device to commission, seconds.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 30
+        },
+        "bluetooth": {
+          "description": "The Bluetooth controller for commissioning over BLE: `hci0` (the\nLinux HCI user channel; BlueZ must not hold it) or `tcp:host:port`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "thread_dataset_url": {
+          "description": "Where to read the Thread network's dataset for a Thread device: an\nOpenThread border router's REST API, e.g.\n`http://127.0.0.1:8081/node/dataset/active`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "DataConfig": {
+      "description": "Where state lives.",
+      "type": "object",
+      "properties": {
+        "dir": {
+          "description": "The directory for the fabric, the controller's identity and the node\nstore.",
+          "type": "string",
+          "default": "/var/lib/matter-bridge"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

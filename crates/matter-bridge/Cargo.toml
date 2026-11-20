@@ -14,6 +14,9 @@ categories = ["command-line-utilities", "network-programming"]
 default = ["ble"]
 # Commissioning over Bluetooth LE.
 ble = ["matter-controller/ble"]
+## Derive a JSON Schema for the configuration, from which the docs' configuration
+## reference is generated (tests/config_reference.rs).
+schema = ["dep:schemars"]
 
 [[bin]]
 name = "matter-bridge"
@@ -23,6 +26,7 @@ path = "src/main.rs"
 matter-controller.workspace = true
 matter-model.workspace = true
 lexopt = "0.3"
+schemars = { version = "1", optional = true, features = ["preserve_order"] }
 ureq = { version = "3", default-features = false }
 rumqttc = { version = "0.25", default-features = false }
 serde.workspace = true
@@ -36,6 +40,10 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 matter-controller.workspace = true
 rumqttd = { version = "0.20", default-features = false }
 tempfile = "3"
+
+[[test]]
+name = "config_reference"
+required-features = ["schema"]
 
 [lints]
 workspace = true
