@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-
 #![allow(async_fn_in_trait)]
 
 #[cfg(feature = "ble")]
@@ -13,6 +12,7 @@ pub mod network;
 pub mod onboarding;
 mod reports;
 pub mod store;
+pub mod x509;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

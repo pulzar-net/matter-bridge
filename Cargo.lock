@@ -1768,12 +1768,14 @@ version = "0.1.0"
 dependencies = [
  "async-io",
  "bluetooth-host",
+ "der",
  "embassy-time",
  "embassy-time-queue-utils",
  "hex",
  "if-addrs",
  "log",
  "matter-model",
+ "p256",
  "rand 0.10.4",
  "rs-matter",
  "serde",
@@ -1783,6 +1785,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing-subscriber",
+ "x509-cert",
 ]
 
 [[package]]

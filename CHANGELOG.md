@@ -11,6 +11,12 @@ All notable changes are listed here. The project follows
   bluetooth-bridge's `bluetooth-host` as the GATT central under rs-matter's
   BTP: `bluetooth = "hci0"` or `"tcp:host:port"`. Not yet exercised end to end
   in CI.
+- `IntermediateCa`: a controller under a root CA elsewhere, its intermediate
+  key made and kept here, signing its own and its devices' certificates from a
+  node id range the root CA assigns; `Config.ca` picks it or the file CA.
+- `x509::to_matter_tlv`: X.509 DER certificates in the Matter profile to
+  Matter TLV, each checked by rebuilding the signed DER.
+- `Controller::abort_commissioning`.
 - Network commissioning for devices reached over Bluetooth: the controller
   reads the device's Network Commissioning features and gives it the Thread
   dataset (`thread_dataset`, `thread_dataset_url` or the configured border

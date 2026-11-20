@@ -31,6 +31,10 @@ serde_json.workspace = true
 socket2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+# X.509 certificates to Matter TLV (the versions rs-matter's crypto uses).
+der = { version = "0.8", features = ["alloc", "oid"] }
+p256 = { version = "0.14", default-features = false, features = ["ecdsa"] }
+x509-cert = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
