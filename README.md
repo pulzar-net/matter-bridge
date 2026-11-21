@@ -26,7 +26,7 @@ Rust that could run headless on small hardware.
 **[Devices](#supported-devices)** |
 **[MQTT API](https://oss.pulzr.net/matter-bridge/mqtt.html)** |
 **[Library](#use-it-as-a-library)** |
-**[Changelog](CHANGELOG.md)**
+**[Releases](https://github.com/pulzar-net/matter-bridge/releases)**
 
 ## Status
 

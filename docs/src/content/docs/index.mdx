@@ -11,9 +11,9 @@ import { LinkCard, CardGrid, Aside } from '@astrojs/starlight/components';
 	title="matter-bridge"
 	tagline="A Matter controller and Matter to MQTT bridge in Rust, on rs-matter. It commissions devices onto a fabric of its own and publishes every attribute and event, with Home Assistant discovery."
 	actions={[
-		{ text: 'Get started', link: '/matter-bridge/getting-started.html', icon: 'right-arrow' },
+		{ text: 'Get started', link: '/matter-bridge/getting-started.html' },
 		{ text: 'Commissioning', link: '/matter-bridge/commissioning.html', variant: 'minimal' },
-		{ text: 'GitHub', link: 'https://github.com/pulzar-net/matter-bridge', variant: 'minimal', icon: 'github' },
+		{ text: 'GitHub', link: 'https://github.com/pulzar-net/matter-bridge', variant: 'minimal' },
 	]}
 />
 
@@ -23,12 +23,12 @@ import { LinkCard, CardGrid, Aside } from '@astrojs/starlight/components';
 
 <Features
 	items={[
-		{ title: 'Commission over IP and Bluetooth', body: 'QR and manual codes; DNS-SD discovery; Bluetooth LE with Wi-Fi or Thread credentials.', icon: 'approve-check', link: '/matter-bridge/commissioning.html' },
-		{ title: 'Any cluster, in JSON', body: 'Read, write, invoke and events on every cluster, named from the CSA\'s data model.', icon: 'seti:json', link: '/matter-bridge/mqtt.html' },
-		{ title: 'Multi-admin', body: 'Add devices you already use in Apple Home or Google Home, and share the bridge\'s with them.', icon: 'random', link: '/matter-bridge/commissioning.html#devices-already-in-another-ecosystem' },
-		{ title: 'Home Assistant', body: 'Lights, switches and sensors appear through MQTT discovery.', icon: 'puzzle', link: '/matter-bridge/home-assistant.html' },
-		{ title: 'Groups', body: 'Put endpoints in groups and switch them together with one multicast command.', icon: 'list-format', link: '/matter-bridge/mqtt.html#groups' },
-		{ title: 'Tested against the reference device', body: 'CI commissions connectedhomeip\'s all-clusters app on every commit; the quick start runs there too.', icon: 'laptop', link: '/matter-bridge/testing.html' },
+		{ title: 'Commission over IP and Bluetooth', body: 'QR and manual codes; DNS-SD discovery; Bluetooth LE with Wi-Fi or Thread credentials.', link: '/matter-bridge/commissioning.html' },
+		{ title: 'Any cluster, in JSON', body: 'Read, write, invoke and events on every cluster, named from the CSA\'s data model.', link: '/matter-bridge/mqtt.html' },
+		{ title: 'Multi-admin', body: 'Add devices you already use in Apple Home or Google Home, and share the bridge\'s with them.', link: '/matter-bridge/commissioning.html#devices-already-in-another-ecosystem' },
+		{ title: 'Home Assistant', body: 'Lights, switches and sensors appear through MQTT discovery.', link: '/matter-bridge/home-assistant.html' },
+		{ title: 'Groups', body: 'Put endpoints in groups and switch them together with one multicast command.', link: '/matter-bridge/mqtt.html#groups' },
+		{ title: 'Tested against the reference device', body: 'CI commissions connectedhomeip\'s all-clusters app on every commit; the quick start runs there too.', link: '/matter-bridge/testing.html' },
 	]}
 />
 

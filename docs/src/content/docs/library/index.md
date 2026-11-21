@@ -25,7 +25,7 @@ matter-controller = { git = "https://github.com/pulzar-net/matter-bridge", tag =
 ```
 
 While the project is at 0.x, minor versions may break the API; the
-[changelog](/matter-bridge/changelog.html) says what changed.
+[release notes](https://github.com/pulzar-net/matter-bridge/releases) say what changed.
 
 ## Conventions
 

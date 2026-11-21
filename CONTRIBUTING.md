@@ -95,8 +95,12 @@ cargo +nightly fuzz run json_to_tlv -- -max_total_time=300
 - One logical change per commit. The subject line says what the change does,
   in plain words, under 72 characters, for example
   `Commissioning over Bluetooth, end to end on Bumble`; the body says why.
-- Add a line to `CHANGELOG.md` under `[Unreleased]` for anything a user or a
-  library user would notice.
+- Say in the pull request what a user or a library user would notice: it
+  goes into the
+  [release notes](https://github.com/pulzar-net/matter-bridge/releases).
+  There is no changelog file; a release's notes are its annotated tag's
+  message (`git tag -a vX.Y.Z --cleanup=whitespace -F notes.md`), which the
+  release workflow publishes.
 - Update the README and `docs/` when you change behavior, a configuration
   key or an MQTT topic.
 - Sign off every commit (see below).
