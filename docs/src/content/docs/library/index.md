@@ -11,7 +11,7 @@ matter-bridge is built as library crates with a thin binary on top.
 | [matter-model](/matter-bridge/library/matter-model.html) | name clusters, attributes, commands and events, and convert between JSON and Matter TLV |
 | [matter-bridge](/matter-bridge/library/matter-bridge.html) | run or embed the bridge itself |
 
-The [API documentation](https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html) covers every public
+The [API documentation](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html) covers every public
 item.
 
 ## Depending on the crates

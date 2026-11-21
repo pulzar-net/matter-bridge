@@ -3,7 +3,7 @@ title: "matter-bridge (crate)"
 description: "The bridge as a library: the same code as the binary."
 ---
 
-The bridge as a library: the same code as the binary. [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_bridge/index.html).
+The bridge as a library: the same code as the binary. [API docs](https://oss.pulzr.net/matter-bridge/api/matter_bridge/index.html).
 
 - `run(config, shutdown)` runs the bridge until `shutdown` completes.
 - `Config` is the configuration file; `Config::load` reads one, and

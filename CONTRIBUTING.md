@@ -17,7 +17,7 @@ rs-matter itself goes to rs-matter's own security process.
   with the version, your configuration and a `RUST_LOG=debug` log.
 - **Larger changes** (a new commissioning flow, a change to the MQTT API or
   the configuration): open an issue first. The
-  [design page](https://pulzar-net.github.io/matter-bridge/design.html) has
+  [design page](https://oss.pulzr.net/matter-bridge/design.html) has
   the plan for the planned features.
 - **Changes rs-matter needs** go to rs-matter as their own pull requests;
   the design page lists the ones known.

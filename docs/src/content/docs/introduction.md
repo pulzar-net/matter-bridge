@@ -13,7 +13,7 @@ controller is a library crate for anyone building Matter software in Rust.
 
 This site is the user guide and the reference. The
 [README](https://github.com/pulzar-net/matter-bridge#readme) is the
-two-minute overview; the [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html)
+two-minute overview; the [API docs](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html)
 cover every type and function.
 
 ## Where to start

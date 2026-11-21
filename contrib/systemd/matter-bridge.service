@@ -10,7 +10,7 @@
 
 [Unit]
 Description=Matter to MQTT bridge
-Documentation=https://pulzar-net.github.io/matter-bridge/
+Documentation=https://oss.pulzr.net/matter-bridge/
 After=network-online.target
 Wants=network-online.target
 

@@ -59,5 +59,5 @@ Out of scope: weaknesses of the Matter specification itself, the MQTT
 broker you run, your Home Assistant installation, and deployments that
 deliberately turn off a documented protection.
 
-The [security model](https://pulzar-net.github.io/matter-bridge/security.html)
+The [security model](https://oss.pulzr.net/matter-bridge/security.html)
 describes what the project defends against and what it relies on you for.

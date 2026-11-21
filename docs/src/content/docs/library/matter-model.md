@@ -4,7 +4,7 @@ description: "The Matter data model, as static tables, and conversion between JS
 ---
 
 The Matter data model, as static tables, and conversion between JSON and
-Matter TLV. No I/O. [API docs](https://pulzar-net.github.io/matter-bridge/api/matter_model/index.html).
+Matter TLV. No I/O. [API docs](https://oss.pulzr.net/matter-bridge/api/matter_model/index.html).
 
 - The tables are generated at build time from the cluster definitions in
   the IDL that rs-matter ships (the CSA's `controller-clusters.matter`):

@@ -112,8 +112,8 @@ jobs:
         # this catches a link left behind by a renamed crate or item page.
         run: |
           set -euo pipefail
-          grep -rhoE 'href="(https://pulzar-net\.github\.io)?/matter-bridge/api/[^"#?]*' docs/dist --include='*.html' \
-            | sed -E 's|^href="(https://pulzar-net\.github\.io)?/matter-bridge/||' | sort -u > "$RUNNER_TEMP/api-links"
+          grep -rhoE 'href="(https://oss\.pulzr\.net)?/matter-bridge/api/[^"#?]*' docs/dist --include='*.html' \
+            | sed -E 's|^href="(https://oss\.pulzr\.net)?/matter-bridge/||' | sort -u > "$RUNNER_TEMP/api-links"
           while read -r p; do
             case "$p" in */) p="${p}index.html" ;; esac
             test -e "docs/dist/$p" || { echo "::error::broken API link: /matter-bridge/$p"; exit 1; }

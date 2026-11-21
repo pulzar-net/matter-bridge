@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/pulzar-net/matter-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/pulzar-net/matter-bridge/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/pulzar-net/matter-bridge)](https://github.com/pulzar-net/matter-bridge/releases/latest)
-[![Docs](https://img.shields.io/badge/docs-pulzar--net.github.io-blue)](https://pulzar-net.github.io/matter-bridge/)
+[![Docs](https://img.shields.io/badge/docs-oss.pulzr.net-blue)](https://oss.pulzr.net/matter-bridge/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.92-blue)](Cargo.toml)
 
@@ -21,10 +21,10 @@ It exists because the established Matter controllers need a Node.js or
 Python runtime or a phone ecosystem, and there was no Matter controller in
 Rust that could run headless on small hardware.
 
-**[Documentation](https://pulzar-net.github.io/matter-bridge/)** |
+**[Documentation](https://oss.pulzr.net/matter-bridge/)** |
 **[Quick start](#quick-start)** |
 **[Devices](#supported-devices)** |
-**[MQTT API](https://pulzar-net.github.io/matter-bridge/mqtt.html)** |
+**[MQTT API](https://oss.pulzr.net/matter-bridge/mqtt.html)** |
 **[Library](#use-it-as-a-library)** |
 **[Changelog](CHANGELOG.md)**
 
@@ -72,7 +72,7 @@ Home Assistant discovery covers lights (On/Off, with brightness from Level
 Control), switches and plugs, temperature, humidity, pressure and
 illuminance sensors, occupancy, contact and leak sensors, and battery
 level. Everything else is on the plain MQTT topics. The
-[devices page](https://pulzar-net.github.io/matter-bridge/devices.html)
+[devices page](https://oss.pulzr.net/matter-bridge/devices.html)
 has the details.
 
 ## Quick start
@@ -131,7 +131,7 @@ to it. Within a minute it appears in Home Assistant under
 mosquitto_sub -h localhost -t 'matter/#' -v
 ```
 
-The [getting started guide](https://pulzar-net.github.io/matter-bridge/getting-started.html)
+The [getting started guide](https://oss.pulzr.net/matter-bridge/getting-started.html)
 runs the same steps against the reference device in a container. To run the
 bridge as a service, see [installation](#installation).
 
@@ -146,7 +146,7 @@ bridge as a service, see [installation](#installation).
 - **systemd**: a hardened unit is in [`contrib/systemd/`](contrib/systemd/matter-bridge.service).
 - **OpenWrt**: a procd init script is in [`contrib/openwrt/`](contrib/openwrt/matter-bridge.init).
 
-The [installation guide](https://pulzar-net.github.io/matter-bridge/installation.html)
+The [installation guide](https://oss.pulzr.net/matter-bridge/installation.html)
 covers each one step by step.
 
 ## Configuration
@@ -163,7 +163,7 @@ The bridge reads one TOML file, `/etc/matter-bridge/config.toml` by default
 
 Unknown keys are an error, so a typo stops the bridge at startup. Every key,
 its type and default are in the
-[configuration reference](https://pulzar-net.github.io/matter-bridge/config-reference.html),
+[configuration reference](https://oss.pulzr.net/matter-bridge/config-reference.html),
 which is generated from the code. [`config.example.toml`](config.example.toml)
 shows them all. Log verbosity comes from `RUST_LOG` (default `info`).
 
@@ -190,7 +190,7 @@ attribute is its number in hex (`0xfff1fc01`).
 | `matter/<device>/<endpoint>/on_off/set`, `.../level_control/set` | in | `ON`, `OFF`, `TOGGLE`, or a level |
 
 `<device>` is the name given at commissioning or with `rename`. Keys never
-appear on MQTT. The [MQTT reference](https://pulzar-net.github.io/matter-bridge/mqtt.html)
+appear on MQTT. The [MQTT reference](https://oss.pulzr.net/matter-bridge/mqtt.html)
 has every request and payload with examples.
 
 ## Use it as a library
@@ -222,9 +222,9 @@ assert!(code.capabilities.is_none());
 # Ok::<(), matter_controller::Error>(())
 ```
 
-The [library guide](https://pulzar-net.github.io/matter-bridge/library/index.html)
+The [library guide](https://oss.pulzr.net/matter-bridge/library/index.html)
 shows how to start a controller, commission, read and subscribe, and the
-[API docs](https://pulzar-net.github.io/matter-bridge/api/matter_controller/index.html)
+[API docs](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html)
 cover every item.
 
 ## Architecture
@@ -248,7 +248,7 @@ cover every item.
                          Matter devices on Ethernet, Wi-Fi or Thread
 ```
 
-The [architecture page](https://pulzar-net.github.io/matter-bridge/architecture.html)
+The [architecture page](https://oss.pulzr.net/matter-bridge/architecture.html)
 explains the layers, the fabric and its CA, and the design rules (no
 `unsafe`, input checked against the data model, bounded memory).
 
@@ -276,7 +276,7 @@ can accept 0.x maturity and, for now, unverified attestation.
   nodes.
 - **Later:** exposing other devices as a Matter bridge.
 
-The [design page](https://pulzar-net.github.io/matter-bridge/design.html)
+The [design page](https://oss.pulzr.net/matter-bridge/design.html)
 has the details. Questions go in [Discussions](https://github.com/pulzar-net/matter-bridge/discussions); bugs and requests in [issues](https://github.com/pulzar-net/matter-bridge/issues).
 
 ## Contributing
@@ -302,7 +302,7 @@ change, and [the code of conduct](CODE_OF_CONDUCT.md).
 Please report vulnerabilities privately through
 [GitHub private vulnerability reporting](https://github.com/pulzar-net/matter-bridge/security/advisories/new),
 never in a public issue. See [SECURITY.md](SECURITY.md) and the
-[security model](https://pulzar-net.github.io/matter-bridge/security.html).
+[security model](https://oss.pulzr.net/matter-bridge/security.html).
 
 ## License
 
