@@ -60,3 +60,15 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
+
+# The MQTT reference (crates/matter-bridge/tests/asyncapi.rs, feature
+# unstable-asyncapi-docs) needs what no asyncapi-rust release has yet:
+# channel and operation messages (upstream main, mlilback/asyncapi-rust#17),
+# and channel and operation descriptions, titles and summaries (our fork,
+# offered upstream). Pinned to pulzar-net/asyncapi-rust, which is never
+# published. Default and release builds never use asyncapi-rust, and
+# `cargo publish` ignores this patch. Remove it once a release has all three.
+[patch.crates-io]
+asyncapi-rust = { git = "https://github.com/pulzar-net/asyncapi-rust", rev = "d62a75517859cc031a3f716df86e64d6406040d1" }
+asyncapi-rust-codegen = { git = "https://github.com/pulzar-net/asyncapi-rust", rev = "d62a75517859cc031a3f716df86e64d6406040d1" }
+asyncapi-rust-models = { git = "https://github.com/pulzar-net/asyncapi-rust", rev = "d62a75517859cc031a3f716df86e64d6406040d1" }

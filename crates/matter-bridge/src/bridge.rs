@@ -1,16 +1,16 @@
 //! The bridge: controller events out to MQTT, MQTT requests and commands in
-//! to the controller.
+//! to the controller. Every payload is a type in [`crate::api`].
 
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 
-use matter_controller::{
-    AttributePath, CommissionRequest, Controller, Event, Networks, Node, WiFi,
-};
-use serde_json::{json, Value};
+use matter_controller::{AttributePath, Controller, Event, Networks, Node, WiFi};
+use serde::de::DeserializeOwned;
+use serde_json::Value as Json;
 
+use crate::api::{self, Availability, BridgeState, Id};
 use crate::config::{Config, MatterConfig};
 use crate::homeassistant::Discovery;
 use crate::mqtt::{self, Incoming, Mqtt};
@@ -43,6 +43,14 @@ impl Names {
                 }?;
                 self.by_id.contains_key(&id).then_some(id)
             })
+    }
+
+    fn devices(&self) -> Vec<api::Device> {
+        self.by_id
+            .values()
+            .cloned()
+            .map(api::Device::from)
+            .collect()
     }
 }
 
@@ -103,7 +111,11 @@ pub async fn run(config: Config, shutdown: impl Future<Output = ()>) -> Result<(
     let base = &bridge.config.mqtt.base_topic;
     bridge
         .mqtt
-        .publish(mqtt::state_topic(base), r#"{"state":"offline"}"#, true)
+        .publish(
+            mqtt::state_topic(base),
+            BridgeState::payload(Availability::Offline),
+            true,
+        )
         .await;
     bridge.mqtt.disconnect().await;
     Ok(())
@@ -119,7 +131,7 @@ impl Bridge {
             Incoming::Connected => self.on_connected().await,
             Incoming::Message { topic, payload } => {
                 if topic == self.config.homeassistant.status_topic {
-                    if payload == b"online" {
+                    if api::HomeAssistantStatus::parse(&payload) == Some(Availability::Online) {
                         self.publish_discovery_all().await;
                     }
                     return;
@@ -159,19 +171,23 @@ impl Bridge {
         }
 
         self.mqtt
-            .publish(mqtt::state_topic(&base), r#"{"state":"online"}"#, true)
+            .publish(
+                mqtt::state_topic(&base),
+                BridgeState::payload(Availability::Online),
+                true,
+            )
             .await;
         let info = self.controller.info().clone();
         self.mqtt
             .publish_json(
                 format!("{base}/bridge/info"),
-                &json!({
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "fabric_id": format!("{:016X}", info.fabric_id),
-                    "compressed_fabric_id": format!("{:016X}", info.compressed_fabric_id),
-                    "node_id": format!("{:016X}", info.node_id),
-                    "vendor_id": info.vendor_id,
-                }),
+                &api::BridgeInfo {
+                    version: env!("CARGO_PKG_VERSION").into(),
+                    fabric_id: format!("{:016X}", info.fabric_id),
+                    compressed_fabric_id: format!("{:016X}", info.compressed_fabric_id),
+                    node_id: format!("{:016X}", info.node_id),
+                    vendor_id: info.vendor_id,
+                },
                 true,
             )
             .await;
@@ -180,13 +196,9 @@ impl Bridge {
     }
 
     async fn publish_devices(&self) {
-        let nodes: Vec<Node> = self.names.read().unwrap().by_id.values().cloned().collect();
+        let devices = api::BridgeDevices(self.names.read().unwrap().devices());
         self.mqtt
-            .publish_json(
-                format!("{}/bridge/devices", self.base()),
-                &serde_json::to_value(nodes).unwrap_or_default(),
-                true,
-            )
+            .publish_json(format!("{}/bridge/devices", self.base()), &devices, true)
             .await;
     }
 
@@ -243,7 +255,7 @@ impl Bridge {
                     topics::cluster(a.cluster),
                     topics::attribute(a.cluster, a.attribute)
                 );
-                let payload = serde_json::to_vec(&a.value).unwrap_or_default();
+                let payload = serde_json::to_vec(&api::AttributeValue(a.value)).unwrap_or_default();
                 self.publish_retained(a.node, topic, payload).await;
             }
             Event::Event(e) => {
@@ -256,25 +268,29 @@ impl Bridge {
                     topics::cluster(e.cluster),
                     topics::event(e.cluster, e.event)
                 );
-                self.mqtt
-                    .publish_json(topic, &json!({"number": e.number, "data": e.data}), false)
-                    .await;
+                let event = api::DeviceEvent {
+                    number: e.number,
+                    data: e.data,
+                };
+                self.mqtt.publish_json(topic, &event, false).await;
             }
             Event::Availability { node, online } => {
                 let name = self.names.read().unwrap().name(node).map(str::to_string);
                 if let Some(name) = name {
-                    let state = if online { "online" } else { "offline" };
+                    let state = if online {
+                        Availability::Online
+                    } else {
+                        Availability::Offline
+                    };
                     self.publish_retained(
                         node,
                         format!("{base}/{name}/availability"),
-                        state.into(),
+                        api::DeviceAvailability(state).payload(),
                     )
                     .await;
                 }
-                self.publish_bridge_event(
-                    &json!({"type": "availability", "node": node, "online": online}),
-                )
-                .await;
+                self.publish_bridge_event(api::BridgeEvent::Availability { node, online })
+                    .await;
             }
             Event::NodeUpdated(node) => {
                 let renamed = self
@@ -296,24 +312,25 @@ impl Bridge {
                     .insert(node.node_id, node.clone());
                 self.publish_discovery(&node).await;
                 self.publish_devices().await;
-                self.publish_bridge_event(&json!({"type": "node_updated", "node": node}))
+                self.publish_bridge_event(api::BridgeEvent::NodeUpdated { node: node.into() })
                     .await;
             }
             Event::NodeRemoved { node } => {
                 self.clear_retained(node).await;
                 self.names.write().unwrap().by_id.remove(&node);
                 self.publish_devices().await;
-                self.publish_bridge_event(&json!({"type": "node_removed", "node": node}))
+                self.publish_bridge_event(api::BridgeEvent::NodeRemoved { node })
                     .await;
             }
             Event::Commissioning { node, step } => {
-                self.publish_bridge_event(
-                    &json!({"type": "commissioning", "node": node, "step": step}),
-                )
+                self.publish_bridge_event(api::BridgeEvent::Commissioning {
+                    node,
+                    step: step.into(),
+                })
                 .await;
             }
             Event::CheckIn { node } => {
-                self.publish_bridge_event(&json!({"type": "check_in", "node": node}))
+                self.publish_bridge_event(api::BridgeEvent::CheckIn { node })
                     .await;
             }
             Event::Ota {
@@ -321,45 +338,38 @@ impl Bridge {
                 step,
                 version,
             } => {
-                self.publish_bridge_event(
-                    &json!({"type": "ota", "node": node, "step": step, "version": version}),
-                )
+                self.publish_bridge_event(api::BridgeEvent::Ota {
+                    node,
+                    step: step.into(),
+                    version,
+                })
                 .await;
             }
         }
     }
 
-    async fn publish_bridge_event(&self, event: &Value) {
+    async fn publish_bridge_event(&self, event: api::BridgeEvent) {
         self.mqtt
-            .publish_json(format!("{}/bridge/event", self.base()), event, false)
+            .publish_json(format!("{}/bridge/event", self.base()), &event, false)
             .await;
     }
 
     fn spawn_request(&self, name: String, payload: Vec<u8>) {
-        let controller = self.controller.clone();
+        let ctx = Ctx {
+            controller: self.controller.clone(),
+            names: self.names.clone(),
+            matter: self.config.matter.clone(),
+        };
         let mqtt = self.mqtt.clone();
-        let names = self.names.clone();
         let base = self.base().to_string();
-        let matter = self.config.matter.clone();
         tokio::spawn(async move {
-            let body: Value = if payload.is_empty() {
-                json!({})
+            let body: Json = if payload.is_empty() {
+                Json::Object(Default::default())
             } else {
-                serde_json::from_slice(&payload).unwrap_or(Value::Null)
+                serde_json::from_slice(&payload).unwrap_or(Json::Null)
             };
-            let transaction = body.get("transaction").cloned();
-            let result = request(&controller, &names, &name, &body, &matter).await;
-            let mut response = match result {
-                Ok(data) => json!({"status": "ok", "data": data}),
-                Err(error) => {
-                    tracing::warn!(request = %name, %error, "request failed");
-                    json!({"status": "error", "error": error})
-                }
-            };
-            if let Some(t) = transaction {
-                response["transaction"] = t;
-            }
-            mqtt.publish_json(format!("{base}/bridge/response/{name}"), &response, false)
+            let response = request(&ctx, &name, body).await;
+            mqtt.publish(format!("{base}/bridge/response/{name}"), response, false)
                 .await;
         });
     }
@@ -379,57 +389,126 @@ impl Bridge {
                 tracing::warn!(%topic, %error, "command failed");
             }
             if is_command {
-                let response = match result {
-                    Ok(data) => json!({"status": "ok", "data": data}),
-                    Err(error) => json!({"status": "error", "error": error}),
-                };
-                mqtt.publish_json(format!("{base}/{topic}/result"), &response, false)
-                    .await;
+                mqtt.publish_json(
+                    format!("{base}/{topic}/result"),
+                    &api::CommandResult::new(result),
+                    false,
+                )
+                .await;
             }
         });
     }
 }
 
+/// What a request needs.
+struct Ctx {
+    controller: Controller,
+    names: Arc<RwLock<Names>>,
+    matter: MatterConfig,
+}
+
+impl Ctx {
+    /// The node a request names, by name or node id.
+    fn node(&self, device: &str) -> Result<u64, String> {
+        self.names
+            .read()
+            .unwrap()
+            .find(device)
+            .ok_or_else(|| format!("no device `{device}`"))
+    }
+}
+
+fn err(e: matter_controller::Error) -> String {
+    e.to_string()
+}
+
+/// Answer request `name` with its body: the response, serialized.
+async fn request(ctx: &Ctx, name: &str, body: Json) -> Vec<u8> {
+    let transaction = body.get("transaction").cloned();
+    // Parse the body as `$req`, run `$handler` on it, and answer with
+    // `$resp`; a body that does not parse is answered with its error.
+    macro_rules! answer {
+        ($resp:ident, $handler:ident) => {{
+            let result = match parse(body) {
+                Ok(req) => $handler(ctx, req).await,
+                Err(e) => Err(e),
+            };
+            if let Err(error) = &result {
+                tracing::warn!(request = %name, %error, "request failed");
+            }
+            serde_json::to_vec(&api::$resp::new(result, transaction))
+        }};
+    }
+    let payload = match name {
+        "commission" => answer!(CommissionResponse, commission),
+        "remove" => answer!(RemoveResponse, remove),
+        "rename" => answer!(RenameResponse, rename),
+        "interview" => answer!(InterviewResponse, interview),
+        "read" => answer!(ReadResponse, read),
+        "write" => answer!(WriteResponse, write),
+        "invoke" => answer!(InvokeResponse, invoke),
+        "add_to_group" => answer!(AddToGroupResponse, add_to_group),
+        "remove_from_group" => answer!(RemoveFromGroupResponse, remove_from_group),
+        "group_invoke" => answer!(GroupInvokeResponse, group_invoke),
+        "open_commissioning_window" => {
+            answer!(OpenCommissioningWindowResponse, open_commissioning_window)
+        }
+        "discover" => answer!(DiscoverResponse, discover),
+        "ota_images" => answer!(OtaImagesResponse, ota_images),
+        "ota_update" => answer!(OtaUpdateResponse, ota_update),
+        "devices" => answer!(DevicesResponse, devices),
+        other => {
+            let error = format!("unknown request `{other}`");
+            tracing::warn!(request = %name, %error, "request failed");
+            serde_json::to_vec(&api::UnknownRequestResponse::new(error, transaction))
+        }
+    };
+    payload.unwrap_or_default()
+}
+
+fn parse<T: DeserializeOwned>(body: Json) -> Result<T, String> {
+    serde_json::from_value(body).map_err(|e| format!("invalid request: {e}"))
+}
+
+fn cluster_of(id: &Id) -> Result<u32, String> {
+    id.resolve(topics::parse_cluster)
+        .ok_or_else(|| format!("no cluster {id:?}"))
+}
+
+fn group_of(group: u16) -> Result<u16, String> {
+    match group {
+        0 => Err("`group` must be 1 to 65535".into()),
+        g => Ok(g),
+    }
+}
+
 /// The networks a device commissioned over Bluetooth may join: a Thread
 /// dataset (`thread_dataset` as hex, or fetched from `thread_dataset_url` or
-/// the configured border router at commissioning time) and Wi-Fi
-/// (`wifi: {ssid, password}`). Neither is kept or logged.
-async fn networks_of(body: &Value, matter: &MatterConfig) -> Result<Networks, String> {
-    let thread_dataset = match body.get("thread_dataset").and_then(Value::as_str) {
-        Some(hex) => Some(hex.to_string()),
-        None => {
-            let url = body
-                .get("thread_dataset_url")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .or_else(|| matter.thread_dataset_url.clone());
-            match url {
-                Some(url) => Some(fetch_dataset(url).await?),
-                None => None,
-            }
-        }
+/// the configured border router at commissioning time) and Wi-Fi. Neither
+/// is kept or logged.
+async fn networks_of(
+    req: &api::CommissionRequest,
+    matter: &MatterConfig,
+) -> Result<Networks, String> {
+    let thread_dataset = match &req.thread_dataset {
+        Some(hex) => Some(hex.clone()),
+        None => match req
+            .thread_dataset_url
+            .clone()
+            .or_else(|| matter.thread_dataset_url.clone())
+        {
+            Some(url) => Some(fetch_dataset(url).await?),
+            None => None,
+        },
     };
     let thread_dataset = thread_dataset
         .map(|hex| matter_controller::network::parse_thread_dataset_hex(&hex))
         .transpose()
         .map_err(|e| e.to_string())?;
-    let wifi = match body.get("wifi") {
-        Some(w) => Some(WiFi {
-            ssid: w
-                .get("ssid")
-                .and_then(Value::as_str)
-                .ok_or("`wifi.ssid` is required")?
-                .as_bytes()
-                .to_vec(),
-            credentials: w
-                .get("password")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .as_bytes()
-                .to_vec(),
-        }),
-        None => None,
-    };
+    let wifi = req.wifi.as_ref().map(|w| WiFi {
+        ssid: w.ssid.as_bytes().to_vec(),
+        credentials: w.password.as_bytes().to_vec(),
+    });
     Ok(Networks {
         thread_dataset,
         wifi,
@@ -450,267 +529,198 @@ async fn fetch_dataset(url: String) -> Result<String, String> {
     .map_err(|e| e.to_string())?
 }
 
-fn node_of(names: &RwLock<Names>, body: &Value) -> Result<u64, String> {
-    let name = body
-        .get("device")
-        .and_then(Value::as_str)
-        .ok_or("`device` is required")?;
-    names
-        .read()
-        .unwrap()
-        .find(name)
-        .ok_or_else(|| format!("no device `{name}`"))
-}
-
-fn group_of(body: &Value) -> Result<u16, String> {
-    body.get("group")
-        .and_then(Value::as_u64)
-        .and_then(|g| u16::try_from(g).ok())
-        .filter(|g| *g != 0)
-        .ok_or_else(|| "`group` is required: 1 to 65535".to_string())
-}
-
-fn path_of(body: &Value) -> Result<(u16, u32), String> {
-    let endpoint = body
-        .get("endpoint")
-        .and_then(Value::as_u64)
-        .and_then(|e| u16::try_from(e).ok())
-        .ok_or("`endpoint` is required")?;
-    let cluster = body
-        .get("cluster")
-        .and_then(|v| topics::value_id(v, topics::parse_cluster))
-        .ok_or("`cluster` is required: a name or a number")?;
-    Ok((endpoint, cluster))
-}
-
-fn timed(body: &Value) -> Option<u16> {
-    body.get("timed")
-        .and_then(Value::as_u64)
-        .and_then(|t| u16::try_from(t).ok())
-}
-
-fn named(values: Vec<matter_controller::AttributeValue>) -> Value {
-    values
-        .into_iter()
+async fn commission(ctx: &Ctx, req: api::CommissionRequest) -> Result<api::Device, String> {
+    let address = req
+        .address
+        .as_deref()
         .map(|a| {
-            json!({
-                "endpoint": a.endpoint,
-                "cluster": topics::cluster(a.cluster),
-                "attribute": topics::attribute(a.cluster, a.attribute),
-                "value": a.value,
-                "status": a.status,
-            })
+            a.parse::<SocketAddr>()
+                .map_err(|_| format!("`address` {a} is not ip:port"))
         })
-        .collect()
+        .transpose()?;
+    if let Some(n) = &req.name {
+        check_name(n)?;
+        if ctx.names.read().unwrap().find(n).is_some() {
+            return Err(format!("the name `{n}` is taken"));
+        }
+    }
+    let networks = networks_of(&req, &ctx.matter).await?;
+    let node = ctx
+        .controller
+        .commission(matter_controller::CommissionRequest {
+            code: req.code,
+            address,
+            name: req.name,
+            discovery_timeout: req.timeout.unwrap_or(ctx.matter.discovery_timeout),
+            networks,
+        })
+        .await
+        .map_err(err)?;
+    Ok(node.into())
 }
 
-async fn request(
-    controller: &Controller,
-    names: &RwLock<Names>,
-    name: &str,
-    body: &Value,
-    matter: &MatterConfig,
-) -> Result<Value, String> {
-    let e = |e: matter_controller::Error| e.to_string();
-    match name {
-        "commission" => {
-            let code = body
-                .get("code")
-                .and_then(Value::as_str)
-                .ok_or("`code` is required: the QR code payload or the manual pairing code")?;
-            let address = match body.get("address").and_then(Value::as_str) {
-                Some(a) => Some(
-                    a.parse::<SocketAddr>()
-                        .map_err(|_| format!("`address` {a} is not ip:port"))?,
-                ),
-                None => None,
-            };
-            let req_name = body.get("name").and_then(Value::as_str).map(str::to_string);
-            if let Some(n) = &req_name {
-                check_name(n)?;
-                if names.read().unwrap().find(n).is_some() {
-                    return Err(format!("the name `{n}` is taken"));
-                }
-            }
-            let timeout = body
-                .get("timeout")
-                .and_then(Value::as_u64)
-                .and_then(|t| u16::try_from(t).ok())
-                .unwrap_or(matter.discovery_timeout);
-            let networks = networks_of(body, matter).await?;
-            let node = controller
-                .commission(CommissionRequest {
-                    code: code.to_string(),
-                    address,
-                    name: req_name,
-                    discovery_timeout: timeout,
-                    networks,
-                })
-                .await
-                .map_err(e)?;
-            Ok(serde_json::to_value(node).unwrap_or_default())
-        }
-        "remove" => {
-            let node = node_of(names, body)?;
-            let force = body.get("force").and_then(Value::as_bool).unwrap_or(false);
-            controller.remove(node, force).await.map_err(e)?;
-            Ok(json!({"node": node}))
-        }
-        "rename" => {
-            let node = node_of(names, body)?;
-            let to = body
-                .get("to")
-                .and_then(Value::as_str)
-                .ok_or("`to` is required")?;
-            check_name(to)?;
-            let node = controller.rename(node, to.to_string()).await.map_err(e)?;
-            Ok(serde_json::to_value(node).unwrap_or_default())
-        }
-        "interview" => {
-            let node = node_of(names, body)?;
-            let node = controller.interview(node).await.map_err(e)?;
-            Ok(serde_json::to_value(node).unwrap_or_default())
-        }
-        "read" => {
-            let node = node_of(names, body)?;
-            let endpoint = body
-                .get("endpoint")
-                .and_then(Value::as_u64)
-                .and_then(|v| u16::try_from(v).ok());
-            let cluster = body
-                .get("cluster")
-                .map(|v| topics::value_id(v, topics::parse_cluster).ok_or("unknown `cluster`"))
-                .transpose()?;
-            let attribute = match (body.get("attribute"), cluster) {
-                (Some(v), Some(c)) => Some(
-                    topics::value_id(v, |s| topics::parse_attribute(c, s))
-                        .ok_or("unknown `attribute`")?,
-                ),
-                (Some(v), None) => Some(
-                    topics::value_id(v, |_| None).ok_or("`attribute` by name needs `cluster`")?,
-                ),
-                (None, _) => None,
-            };
-            let values = controller
-                .read(
-                    node,
-                    AttributePath {
-                        endpoint,
-                        cluster,
-                        attribute,
-                    },
-                )
-                .await
-                .map_err(e)?;
-            Ok(named(values))
-        }
-        "write" => {
-            let node = node_of(names, body)?;
-            let (endpoint, cluster) = path_of(body)?;
-            let attribute = body
-                .get("attribute")
-                .and_then(|v| topics::value_id(v, |s| topics::parse_attribute(cluster, s)))
-                .ok_or("`attribute` is required")?;
-            let value = body.get("value").cloned().ok_or("`value` is required")?;
-            controller
-                .write(node, endpoint, cluster, attribute, value, timed(body))
-                .await
-                .map_err(e)?;
-            Ok(Value::Null)
-        }
-        "invoke" => {
-            let node = node_of(names, body)?;
-            let (endpoint, cluster) = path_of(body)?;
-            let command = body
-                .get("command")
-                .and_then(|v| topics::value_id(v, |s| topics::parse_command(cluster, s)))
-                .ok_or("`command` is required")?;
-            let fields = body.get("fields").cloned().unwrap_or(Value::Null);
-            controller
-                .invoke(node, endpoint, cluster, command, fields, timed(body))
-                .await
-                .map_err(e)
-        }
-        "add_to_group" | "remove_from_group" => {
-            let node = node_of(names, body)?;
-            let endpoint = body
-                .get("endpoint")
-                .and_then(Value::as_u64)
-                .and_then(|e| u16::try_from(e).ok())
-                .ok_or("`endpoint` is required")?;
-            let group = group_of(body)?;
-            if name == "add_to_group" {
-                let label = body
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
-                controller
-                    .add_to_group(node, endpoint, group, label)
-                    .await
-                    .map_err(e)?;
-            } else {
-                controller
-                    .remove_from_group(node, endpoint, group)
-                    .await
-                    .map_err(e)?;
-            }
-            Ok(Value::Null)
-        }
-        "group_invoke" => {
-            let group = group_of(body)?;
-            let cluster = body
-                .get("cluster")
-                .and_then(|v| topics::value_id(v, topics::parse_cluster))
-                .ok_or("`cluster` is required: a name or a number")?;
-            let command = body
-                .get("command")
-                .and_then(|v| topics::value_id(v, |s| topics::parse_command(cluster, s)))
-                .ok_or("`command` is required")?;
-            let fields = body.get("fields").cloned().unwrap_or(Value::Null);
-            controller
-                .group_invoke(group, cluster, command, fields)
-                .await
-                .map_err(e)?;
-            Ok(Value::Null)
-        }
-        "open_commissioning_window" => {
-            let node = node_of(names, body)?;
-            let timeout = body
-                .get("timeout")
-                .and_then(Value::as_u64)
-                .and_then(|t| u16::try_from(t).ok())
-                .unwrap_or(300);
-            let window = controller
-                .open_commissioning_window(node, timeout)
-                .await
-                .map_err(e)?;
-            Ok(serde_json::to_value(window).unwrap_or_default())
-        }
-        "discover" => {
-            let seconds = body
-                .get("timeout")
-                .and_then(Value::as_u64)
-                .and_then(|t| u16::try_from(t).ok())
-                .unwrap_or(5);
-            let found = controller.discover(seconds).await.map_err(e)?;
-            Ok(serde_json::to_value(found).unwrap_or_default())
-        }
-        "ota_images" => {
-            let images = controller.ota_images().map_err(e)?;
-            Ok(serde_json::to_value(images).unwrap_or_default())
-        }
-        "ota_update" => {
-            let node = node_of(names, body)?;
-            let image = controller.announce_ota(node).await.map_err(e)?;
-            Ok(serde_json::to_value(image).unwrap_or_default())
-        }
-        "devices" => {
-            let nodes = controller.nodes().await.map_err(e)?;
-            Ok(serde_json::to_value(nodes).unwrap_or_default())
-        }
-        other => Err(format!("unknown request `{other}`")),
-    }
+async fn remove(ctx: &Ctx, req: api::RemoveRequest) -> Result<api::Removed, String> {
+    let node = ctx.node(&req.device)?;
+    ctx.controller.remove(node, req.force).await.map_err(err)?;
+    Ok(api::Removed { node })
+}
+
+async fn rename(ctx: &Ctx, req: api::RenameRequest) -> Result<api::Device, String> {
+    let node = ctx.node(&req.device)?;
+    check_name(&req.to)?;
+    let node = ctx.controller.rename(node, req.to).await.map_err(err)?;
+    Ok(node.into())
+}
+
+async fn interview(ctx: &Ctx, req: api::InterviewRequest) -> Result<api::Device, String> {
+    let node = ctx.node(&req.device)?;
+    Ok(ctx.controller.interview(node).await.map_err(err)?.into())
+}
+
+async fn read(ctx: &Ctx, req: api::ReadRequest) -> Result<Vec<api::ReadValue>, String> {
+    let node = ctx.node(&req.device)?;
+    let cluster = req.cluster.as_ref().map(cluster_of).transpose()?;
+    let attribute = match (&req.attribute, cluster) {
+        (Some(a), Some(c)) => Some(
+            a.resolve(|s| topics::parse_attribute(c, s))
+                .ok_or("unknown `attribute`")?,
+        ),
+        (Some(a), None) => Some(
+            a.resolve(|_| None)
+                .ok_or("`attribute` by name needs `cluster`")?,
+        ),
+        (None, _) => None,
+    };
+    let values = ctx
+        .controller
+        .read(
+            node,
+            AttributePath {
+                endpoint: req.endpoint,
+                cluster,
+                attribute,
+            },
+        )
+        .await
+        .map_err(err)?;
+    Ok(values
+        .into_iter()
+        .map(|a| api::ReadValue {
+            endpoint: a.endpoint,
+            cluster: topics::cluster(a.cluster),
+            attribute: topics::attribute(a.cluster, a.attribute),
+            value: a.value,
+            status: a.status,
+        })
+        .collect())
+}
+
+async fn write(ctx: &Ctx, req: api::WriteRequest) -> Result<(), String> {
+    let node = ctx.node(&req.device)?;
+    let cluster = cluster_of(&req.cluster)?;
+    let attribute = req
+        .attribute
+        .resolve(|s| topics::parse_attribute(cluster, s))
+        .ok_or("unknown `attribute`")?;
+    ctx.controller
+        .write(node, req.endpoint, cluster, attribute, req.value, req.timed)
+        .await
+        .map_err(err)
+}
+
+async fn invoke(ctx: &Ctx, req: api::InvokeRequest) -> Result<Json, String> {
+    let node = ctx.node(&req.device)?;
+    let cluster = cluster_of(&req.cluster)?;
+    let command = req
+        .command
+        .resolve(|s| topics::parse_command(cluster, s))
+        .ok_or("unknown `command`")?;
+    ctx.controller
+        .invoke(
+            node,
+            req.endpoint,
+            cluster,
+            command,
+            req.fields.unwrap_or(Json::Null),
+            req.timed,
+        )
+        .await
+        .map_err(err)
+}
+
+async fn add_to_group(ctx: &Ctx, req: api::AddToGroupRequest) -> Result<(), String> {
+    let node = ctx.node(&req.device)?;
+    let group = group_of(req.group)?;
+    ctx.controller
+        .add_to_group(node, req.endpoint, group, req.name.unwrap_or_default())
+        .await
+        .map_err(err)
+}
+
+async fn remove_from_group(ctx: &Ctx, req: api::RemoveFromGroupRequest) -> Result<(), String> {
+    let node = ctx.node(&req.device)?;
+    let group = group_of(req.group)?;
+    ctx.controller
+        .remove_from_group(node, req.endpoint, group)
+        .await
+        .map_err(err)
+}
+
+async fn group_invoke(ctx: &Ctx, req: api::GroupInvokeRequest) -> Result<(), String> {
+    let group = group_of(req.group)?;
+    let cluster = cluster_of(&req.cluster)?;
+    let command = req
+        .command
+        .resolve(|s| topics::parse_command(cluster, s))
+        .ok_or("unknown `command`")?;
+    ctx.controller
+        .group_invoke(group, cluster, command, req.fields.unwrap_or(Json::Null))
+        .await
+        .map_err(err)
+}
+
+async fn open_commissioning_window(
+    ctx: &Ctx,
+    req: api::OpenCommissioningWindowRequest,
+) -> Result<api::CommissioningWindow, String> {
+    let node = ctx.node(&req.device)?;
+    let window = ctx
+        .controller
+        .open_commissioning_window(node, req.timeout.unwrap_or(300))
+        .await
+        .map_err(err)?;
+    Ok(window.into())
+}
+
+async fn discover(
+    ctx: &Ctx,
+    req: api::DiscoverRequest,
+) -> Result<Vec<api::Commissionable>, String> {
+    let found = ctx
+        .controller
+        .discover(req.timeout.unwrap_or(5))
+        .await
+        .map_err(err)?;
+    Ok(found.into_iter().map(Into::into).collect())
+}
+
+async fn ota_images(ctx: &Ctx, _req: api::OtaImagesRequest) -> Result<Vec<api::OtaImage>, String> {
+    let images = ctx.controller.ota_images().map_err(err)?;
+    Ok(images.into_iter().map(Into::into).collect())
+}
+
+async fn ota_update(
+    ctx: &Ctx,
+    req: api::OtaUpdateRequest,
+) -> Result<Option<api::OtaImage>, String> {
+    let node = ctx.node(&req.device)?;
+    let image = ctx.controller.announce_ota(node).await.map_err(err)?;
+    Ok(image.map(Into::into))
+}
+
+async fn devices(ctx: &Ctx, _req: api::DevicesRequest) -> Result<Vec<api::Device>, String> {
+    let nodes = ctx.controller.nodes().await.map_err(err)?;
+    Ok(nodes.into_iter().map(Into::into).collect())
 }
 
 /// A node name must work as one topic segment and not shadow the bridge's
@@ -729,8 +739,7 @@ async fn device_command(
     names: &RwLock<Names>,
     parts: &[String],
     payload: &[u8],
-) -> Result<Value, String> {
-    let e = |e: matter_controller::Error| e.to_string();
+) -> Result<Json, String> {
     let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
     let (device, endpoint, cluster) = match parts.as_slice() {
         [d, ep, cl, ..] => (*d, *ep, *cl),
@@ -746,70 +755,67 @@ async fn device_command(
         .map_err(|_| format!("`{endpoint}` is not an endpoint number"))?;
     let cluster =
         topics::parse_cluster(cluster).ok_or_else(|| format!("no cluster `{cluster}`"))?;
-    let text = String::from_utf8_lossy(payload);
-    let json: Value =
-        serde_json::from_slice(payload).unwrap_or_else(|_| Value::String(text.trim().to_string()));
 
     match parts.as_slice() {
-        [_, _, _, "set"] => match cluster {
-            ON_OFF => {
-                let command = match &json {
-                    Value::Bool(true) => 1,
-                    Value::Bool(false) => 0,
-                    Value::String(s) if s.eq_ignore_ascii_case("on") => 1,
-                    Value::String(s) if s.eq_ignore_ascii_case("off") => 0,
-                    Value::String(s) if s.eq_ignore_ascii_case("toggle") => 2,
-                    _ => return Err("on_off/set takes ON, OFF or TOGGLE".into()),
-                };
-                controller
-                    .invoke(node, endpoint, ON_OFF, command, Value::Null, None)
-                    .await
-                    .map_err(e)
+        [_, _, _, "set"] => {
+            let value = api::ClusterSet::from_payload(payload).0;
+            match cluster {
+                ON_OFF => {
+                    let command = match &value {
+                        Json::Bool(true) => 1,
+                        Json::Bool(false) => 0,
+                        Json::String(s) if s.eq_ignore_ascii_case("on") => 1,
+                        Json::String(s) if s.eq_ignore_ascii_case("off") => 0,
+                        Json::String(s) if s.eq_ignore_ascii_case("toggle") => 2,
+                        _ => return Err("on_off/set takes ON, OFF or TOGGLE".into()),
+                    };
+                    controller
+                        .invoke(node, endpoint, ON_OFF, command, Json::Null, None)
+                        .await
+                        .map_err(err)
+                }
+                LEVEL_CONTROL => {
+                    let level = value
+                        .as_u64()
+                        .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+                        .filter(|l| *l <= 254)
+                        .ok_or("level_control/set takes a level, 0 to 254")?;
+                    controller
+                        .invoke(
+                            node,
+                            endpoint,
+                            LEVEL_CONTROL,
+                            0x04, // MoveToLevelWithOnOff
+                            serde_json::json!({"level": level, "optionsMask": 0, "optionsOverride": 0}),
+                            None,
+                        )
+                        .await
+                        .map_err(err)
+                }
+                _ => Err(format!(
+                    "{}/set is not supported; set an attribute or invoke a command",
+                    topics::cluster(cluster)
+                )),
             }
-            LEVEL_CONTROL => {
-                let level = json
-                    .as_u64()
-                    .or_else(|| json.as_str().and_then(|s| s.parse().ok()))
-                    .filter(|l| *l <= 254)
-                    .ok_or("level_control/set takes a level, 0 to 254")?;
-                controller
-                    .invoke(
-                        node,
-                        endpoint,
-                        LEVEL_CONTROL,
-                        0x04, // MoveToLevelWithOnOff
-                        json!({"level": level, "optionsMask": 0, "optionsOverride": 0}),
-                        None,
-                    )
-                    .await
-                    .map_err(e)
-            }
-            _ => Err(format!(
-                "{}/set is not supported; set an attribute or invoke a command",
-                topics::cluster(cluster)
-            )),
-        },
+        }
         [_, _, _, attribute, "set"] => {
             let attribute = topics::parse_attribute(cluster, attribute)
                 .ok_or_else(|| format!("no attribute `{attribute}`"))?;
+            let value = api::AttributeWrite::from_payload(payload).0;
             controller
-                .write(node, endpoint, cluster, attribute, json, None)
+                .write(node, endpoint, cluster, attribute, value, None)
                 .await
-                .map_err(e)?;
-            Ok(Value::Null)
+                .map_err(err)?;
+            Ok(Json::Null)
         }
         [_, _, _, "command", command] => {
             let command = topics::parse_command(cluster, command)
                 .ok_or_else(|| format!("no command `{command}`"))?;
-            let fields = if payload.is_empty() {
-                Value::Null
-            } else {
-                json
-            };
+            let fields = api::CommandFields::from_payload(payload).0;
             controller
                 .invoke(node, endpoint, cluster, command, fields, None)
                 .await
-                .map_err(e)
+                .map_err(err)
         }
         _ => Err("not a device topic".into()),
     }

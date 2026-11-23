@@ -18,53 +18,31 @@ default base topic throughout.
   vendor's) is its number in hex, such as `0xfff1fc01`. Requests accept a
   name or a number.
 
-## Topics at a glance
+## Topics
 
-| Topic | Direction | Retained | What |
-|---|---|---|---|
-| `matter/bridge/state` | out | yes | `{"state":"online"}` or `{"state":"offline"}` (also the last will) |
-| `matter/bridge/info` | out | yes | the bridge and its fabric |
-| `matter/bridge/devices` | out | yes | every node and its interview |
-| `matter/bridge/event` | out | no | commissioning steps, node updates, removals, availability |
-| `matter/bridge/request/<name>` | in | | a request |
-| `matter/bridge/response/<name>` | out | no | its answer |
-| `matter/<device>/availability` | out | yes | `online` while its subscription holds, else `offline` |
-| `matter/<device>/<endpoint>/<cluster>/<attribute>` | out | yes | the attribute's value |
-| `matter/<device>/<endpoint>/<cluster>/<attribute>/set` | in | | write it |
-| `matter/<device>/<endpoint>/<cluster>/command/<command>` | in | | invoke a command |
-| `matter/<device>/<endpoint>/<cluster>/command/<command>/result` | out | no | the command's response, or its error |
-| `matter/<device>/<endpoint>/<cluster>/event/<event>` | out | no | an event |
-| `matter/<device>/<endpoint>/on_off/set` | in | | `ON`, `OFF` or `TOGGLE` |
-| `matter/<device>/<endpoint>/level_control/set` | in | | a level, 0 to 254 |
+The [MQTT reference](/matter-bridge/mqtt-reference.html) lists every topic with its QoS, retain flag and payload, generated
+from the bridge's own types. In short:
 
-## Bridge topics
+- `matter/bridge/state`, `bridge/info` and `bridge/devices` (retained) say
+  whether the bridge runs, what fabric it holds and which devices are on it;
+  `bridge/event` reports commissioning steps, device updates and removals,
+  availability changes, Check-Ins and software update steps as they happen.
+- `matter/bridge/request/<name>` takes a request, answered on
+  `matter/bridge/response/<name>`.
+- `matter/<device>/availability` (retained) is `online` while the bridge's
+  subscription to the device holds, else `offline`, as plain text.
+- `matter/<device>/<endpoint>/<cluster>/<attribute>` (retained) carries each
+  attribute's value; `.../event/<event>` each event.
+- `.../<attribute>/set` writes an attribute, `.../command/<command>` invokes
+  a command (its outcome on `.../command/<command>/result`), and `on_off/set`
+  and `level_control/set` switch and dim.
 
-### `bridge/info`
-
-```json
-{ "version": "0.1.0", "fabric_id": "...", "compressed_fabric_id": "...", "node_id": "...", "vendor_id": 65521 }
-```
-
-`fabric_id`, `compressed_fabric_id` and the controller's own `node_id` are
-16 upper-case hex digits.
-
-### `bridge/devices`
-
-Every node with its interview: node id, name, vendor and product (from Basic
+`bridge/info` gives `fabric_id`, `compressed_fabric_id` and the bridge's own
+`node_id` as 16 upper-case hex digits. `bridge/devices` holds every device
+with its interview: node id, name, vendor and product (from Basic
 Information), and its endpoints with their device types and the clusters
 each serves (from Descriptor). The same shape is in the `commission`,
 `interview` and `rename` responses.
-
-### `bridge/event`
-
-| `type` | Fields |
-|---|---|
-| `commissioning` | `node`, `step`: one per step of a commissioning |
-| `node_updated` | `node`: commissioned, interviewed or renamed |
-| `node_removed` | `node` |
-| `check_in` | `node`: a sleeping device woke; its subscription is renewed and queued requests go out |
-| `ota` | `node`, `step` (`offered`, `applying`, `applied`), `version` |
-| `availability` | `node`, `online`: its subscription started or lapsed |
 
 ## Values
 
@@ -131,26 +109,13 @@ Publish a request to `matter/bridge/request/<name>`; the answer comes on
 ```
 
 Every request takes an optional `transaction`, copied into the response.
+The [MQTT reference](/matter-bridge/mqtt-reference.html) has each request's fields and each response's data: commissioning
+(over IP, or over Bluetooth with Wi-Fi credentials or a Thread dataset),
+commissioning windows for other ecosystems, reads, writes and invokes,
+groups, interviews, renames and removals, discovery, the device list and
+software updates.
 
-| Request | Fields | Data |
-|---|---|---|
-| `commission` | `code`, optional `name`, `address`, `timeout`; for Bluetooth: `wifi` (`ssid`, `password`), `thread_dataset`, `thread_dataset_url` | the node |
-| `open_commissioning_window` | `device`, optional `timeout` (180 to 900 s, default 300) | `node`, `manual_code`, `qr_code`, `discriminator`, `timeout` |
-| `read` | `device`, optional `endpoint`, `cluster`, `attribute` (any left out: all of them) | a list of `endpoint`, `cluster`, `attribute`, `value`, `status` |
-| `write` | `device`, `endpoint`, `cluster`, `attribute`, `value`, optional `timed` (ms) | `null` |
-| `invoke` | `device`, `endpoint`, `cluster`, `command`, optional `fields`, `timed` (ms) | the response's fields |
-| `add_to_group` | `device`, `endpoint`, `group` (1 to 65535), optional `name` | `null` |
-| `remove_from_group` | `device`, `endpoint`, `group` | `null` |
-| `group_invoke` | `group`, `cluster`, `command`, optional `fields` | `null` |
-| `interview` | `device` | the node |
-| `rename` | `device`, `to` | the node |
-| `remove` | `device`, optional `force` | `node` |
-| `discover` | optional `timeout` (seconds, default 5) | the commissionable devices seen |
-| `devices` | | every node |
-| `ota_images` | | the OTA images offered |
-| `ota_update` | `device` | the image it will be offered, or `null` when none is newer |
-
-`timed` sends the write or command as a timed interaction, which some
+`timed` sends a write or command as a timed interaction, which some
 clusters require (door locks, for example).
 
 ### Groups

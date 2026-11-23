@@ -3,8 +3,8 @@
 //! cluster alone is ambiguous), so no per-device table is needed.
 
 use matter_controller::Node;
-use serde_json::{json, Value};
 
+use crate::api::{DiscoveryAvailability, DiscoveryConfig, DiscoveryDevice};
 use crate::topics;
 
 const ON_OFF: u32 = 0x0006;
@@ -33,30 +33,40 @@ pub struct Discovery<'a> {
     pub fabric: u64,
 }
 
+fn some(s: &str) -> Option<String> {
+    Some(s.to_string())
+}
+
 impl Discovery<'_> {
     fn node_key(&self, node: &Node) -> String {
         format!("matter_{:016x}_{:016x}", self.fabric, node.node_id)
     }
 
     /// Every discovery message for `node`, as (topic, config).
-    pub fn configs(&self, node: &Node) -> Vec<(String, Value)> {
+    pub fn configs(&self, node: &Node) -> Vec<(String, DiscoveryConfig)> {
         let base = self.base;
         let name = &node.name;
         let key = self.node_key(node);
-        let device = json!({
-            "identifiers": [key],
-            "name": name,
-            "manufacturer": node.basic.vendor_name,
-            "model": node.basic.product_name,
-            "sw_version": node.basic.software_version,
-            "hw_version": node.basic.hardware_version,
-            "serial_number": node.basic.serial_number,
-            "via_device": format!("matter_bridge_{:016x}", self.fabric),
-        });
-        let availability = json!([
-            {"topic": format!("{base}/bridge/state"), "value_template": "{{ value_json.state }}"},
-            {"topic": format!("{base}/{name}/availability")},
-        ]);
+        let device = DiscoveryDevice {
+            identifiers: vec![key.clone()],
+            name: name.clone(),
+            manufacturer: node.basic.vendor_name.clone(),
+            model: node.basic.product_name.clone(),
+            sw_version: node.basic.software_version.clone(),
+            hw_version: node.basic.hardware_version.clone(),
+            serial_number: node.basic.serial_number.clone(),
+            via_device: format!("matter_bridge_{:016x}", self.fabric),
+        };
+        let availability = vec![
+            DiscoveryAvailability {
+                topic: format!("{base}/bridge/state"),
+                value_template: some("{{ value_json.state }}"),
+            },
+            DiscoveryAvailability {
+                topic: format!("{base}/{name}/availability"),
+                value_template: None,
+            },
+        ];
 
         let mut out = Vec::new();
         for (&ep, endpoint) in &node.endpoints {
@@ -69,17 +79,23 @@ impl Discovery<'_> {
                     topics::attribute(cluster, attribute)
                 )
             };
-            let mut entity = |component: &str, cluster: u32, label: &str, extra: Value| {
-                let mut config = json!({
-                    "name": label,
-                    "unique_id": format!("{key}_{ep}_{cluster:x}"),
-                    "object_id": format!("{name}_{ep}_{}", topics::cluster(cluster)),
-                    "device": device,
-                    "availability": availability,
-                    "availability_mode": "all",
-                });
-                merge(&mut config, extra);
-                strip_nulls(&mut config);
+            // An entity of `component` for `cluster`, its state on
+            // `state_topic`; `extra` fills in the rest.
+            let mut entity = |component: &str,
+                              cluster: u32,
+                              label: &str,
+                              state_topic: String,
+                              extra: DiscoveryConfig| {
+                let config = DiscoveryConfig {
+                    name: label.to_string(),
+                    unique_id: format!("{key}_{ep}_{cluster:x}"),
+                    object_id: format!("{name}_{ep}_{}", topics::cluster(cluster)),
+                    device: device.clone(),
+                    availability: availability.clone(),
+                    availability_mode: "all".into(),
+                    state_topic,
+                    ..extra
+                };
                 out.push((
                     format!("{}/{component}/{key}/{ep}_{cluster:x}/config", self.prefix),
                     config,
@@ -93,35 +109,31 @@ impl Discovery<'_> {
             }
 
             if serves(ON_OFF) {
-                let state = json!({
-                    "command_topic": format!("{base}/{name}/{ep}/on_off/set"),
-                    "state_topic": topic(ON_OFF, 0),
-                });
+                let command_topic = Some(format!("{base}/{name}/{ep}/on_off/set"));
                 if LIGHTS.iter().any(|&t| is(t)) {
-                    let mut light = json!({
-                        "state_value_template": "{{ 'ON' if value_json else 'OFF' }}",
-                    });
-                    merge(&mut light, state);
+                    let mut light = DiscoveryConfig {
+                        command_topic,
+                        state_value_template: some("{{ 'ON' if value_json else 'OFF' }}"),
+                        ..Default::default()
+                    };
                     if serves(LEVEL_CONTROL) {
-                        merge(
-                            &mut light,
-                            json!({
-                                "brightness_command_topic": format!("{base}/{name}/{ep}/level_control/set"),
-                                "brightness_state_topic": topic(LEVEL_CONTROL, 0),
-                                "brightness_scale": 254,
-                                "brightness_value_template": "{{ value_json if value_json is not none else 0 }}",
-                            }),
-                        );
+                        light.brightness_command_topic =
+                            Some(format!("{base}/{name}/{ep}/level_control/set"));
+                        light.brightness_state_topic = Some(topic(LEVEL_CONTROL, 0));
+                        light.brightness_scale = Some(254);
+                        light.brightness_value_template =
+                            some("{{ value_json if value_json is not none else 0 }}");
                     }
-                    entity("light", ON_OFF, "Light", light);
+                    entity("light", ON_OFF, "Light", topic(ON_OFF, 0), light);
                 } else {
-                    let mut switch = json!({
-                        "value_template": "{{ 'ON' if value_json else 'OFF' }}",
-                        "state_on": "ON",
-                        "state_off": "OFF",
-                    });
-                    merge(&mut switch, state);
-                    entity("switch", ON_OFF, "Switch", switch);
+                    let switch = DiscoveryConfig {
+                        command_topic,
+                        value_template: some("{{ 'ON' if value_json else 'OFF' }}"),
+                        state_on: some("ON"),
+                        state_off: some("OFF"),
+                        ..Default::default()
+                    };
+                    entity("switch", ON_OFF, "Switch", topic(ON_OFF, 0), switch);
                 }
             }
 
@@ -131,13 +143,14 @@ impl Discovery<'_> {
                         "sensor",
                         cluster,
                         label,
-                        json!({
-                            "state_topic": topic(cluster, 0),
-                            "value_template": template,
-                            "device_class": class,
-                            "unit_of_measurement": unit,
-                            "state_class": "measurement",
-                        }),
+                        topic(cluster, 0),
+                        DiscoveryConfig {
+                            value_template: some(template),
+                            device_class: some(class),
+                            unit_of_measurement: some(unit),
+                            state_class: some("measurement"),
+                            ..Default::default()
+                        },
                     );
                 };
             if serves(TEMPERATURE) {
@@ -182,20 +195,23 @@ impl Discovery<'_> {
                     "binary_sensor",
                     OCCUPANCY,
                     "Occupancy",
-                    json!({
-                        "state_topic": topic(OCCUPANCY, 0),
-                        "value_template": "{{ 'ON' if (value_json | int) | bitwise_and(1) else 'OFF' }}",
-                        "device_class": "occupancy",
-                    }),
+                    topic(OCCUPANCY, 0),
+                    DiscoveryConfig {
+                        value_template: some(
+                            "{{ 'ON' if (value_json | int) | bitwise_and(1) else 'OFF' }}",
+                        ),
+                        device_class: some("occupancy"),
+                        ..Default::default()
+                    },
                 );
             }
             if serves(BOOLEAN_STATE) {
                 // A contact sensor's state is true when in contact (closed);
                 // Home Assistant's door is on when open.
                 let (class, template) = if is(CONTACT_SENSOR) {
-                    (Some("door"), "{{ 'OFF' if value_json else 'ON' }}")
+                    (some("door"), "{{ 'OFF' if value_json else 'ON' }}")
                 } else if is(WATER_LEAK_DETECTOR) {
-                    (Some("moisture"), "{{ 'ON' if value_json else 'OFF' }}")
+                    (some("moisture"), "{{ 'ON' if value_json else 'OFF' }}")
                 } else {
                     (None, "{{ 'ON' if value_json else 'OFF' }}")
                 };
@@ -203,11 +219,12 @@ impl Discovery<'_> {
                     "binary_sensor",
                     BOOLEAN_STATE,
                     "State",
-                    json!({
-                        "state_topic": topic(BOOLEAN_STATE, 0),
-                        "value_template": template,
-                        "device_class": class,
-                    }),
+                    topic(BOOLEAN_STATE, 0),
+                    DiscoveryConfig {
+                        value_template: some(template),
+                        device_class: class,
+                        ..Default::default()
+                    },
                 );
             }
             if serves(POWER_SOURCE) {
@@ -215,32 +232,21 @@ impl Discovery<'_> {
                     "sensor",
                     POWER_SOURCE,
                     "Battery",
-                    json!({
-                        "state_topic": topic(POWER_SOURCE, 0x000C),
-                        "value_template": "{{ (value_json / 2) | round(0) if value_json is not none else none }}",
-                        "device_class": "battery",
-                        "unit_of_measurement": "%",
-                        "state_class": "measurement",
-                        "entity_category": "diagnostic",
-                    }),
+                    topic(POWER_SOURCE, 0x000C),
+                    DiscoveryConfig {
+                        value_template: some(
+                            "{{ (value_json / 2) | round(0) if value_json is not none else none }}",
+                        ),
+                        device_class: some("battery"),
+                        unit_of_measurement: some("%"),
+                        state_class: some("measurement"),
+                        entity_category: some("diagnostic"),
+                        ..Default::default()
+                    },
                 );
             }
         }
         out
-    }
-}
-
-/// Home Assistant wants a key left out rather than null.
-fn strip_nulls(v: &mut Value) {
-    if let Value::Object(map) = v {
-        map.retain(|_, v| !v.is_null());
-        map.values_mut().for_each(strip_nulls);
-    }
-}
-
-fn merge(into: &mut Value, from: Value) {
-    if let (Value::Object(a), Value::Object(b)) = (into, from) {
-        a.extend(b);
     }
 }
 
@@ -298,11 +304,14 @@ mod tests {
             topic,
             "homeassistant/light/matter_00000000000000ab_0000000000000002/1_6/config"
         );
-        assert_eq!(config["command_topic"], "matter/lamp/1/on_off/set");
-        assert_eq!(config["state_topic"], "matter/lamp/1/on_off/on_off");
         assert_eq!(
-            config["brightness_state_topic"],
-            "matter/lamp/1/level_control/current_level"
+            config.command_topic.as_deref(),
+            Some("matter/lamp/1/on_off/set")
+        );
+        assert_eq!(config.state_topic, "matter/lamp/1/on_off/on_off");
+        assert_eq!(
+            config.brightness_state_topic.as_deref(),
+            Some("matter/lamp/1/level_control/current_level")
         );
     }
 
@@ -315,7 +324,7 @@ mod tests {
             .collect();
         assert_eq!(components, ["switch", "sensor", "sensor"]);
         assert_eq!(
-            configs[1].1["state_topic"],
+            configs[1].1.state_topic,
             "matter/lamp/1/temperature_measurement/measured_value"
         );
     }
@@ -323,9 +332,9 @@ mod tests {
     #[test]
     fn contact_sensor_is_a_door() {
         let configs = D.configs(&node(CONTACT_SENSOR, &[BOOLEAN_STATE]));
-        assert_eq!(configs[0].1["device_class"], "door");
+        assert_eq!(configs[0].1.device_class.as_deref(), Some("door"));
         assert_eq!(
-            configs[0].1["state_topic"],
+            configs[0].1.state_topic,
             "matter/lamp/1/boolean_state/state_value"
         );
     }
