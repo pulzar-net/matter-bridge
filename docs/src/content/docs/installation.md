@@ -48,10 +48,9 @@ default) is built in; `--no-default-features` leaves it out.
 Matter runs over IPv6 on the local network, and finds devices with DNS-SD
 (mDNS):
 
-- the machine needs IPv6 on the interface that reaches the devices, with an
-  address beyond link-local (a ULA or global address, as most home networks
-  with a Thread border router or IPv6 router have); set `matter.interface`
-  when it has several;
+- the machine needs IPv6 on the interface that reaches the devices; a
+  link-local address is enough, so no IPv6 router is needed. Set
+  `matter.interface` when it has several;
 - UDP port `matter.port` (5541 by default) and mDNS (UDP 5353) must not be
   blocked by a firewall;
 - mDNS does not cross routers or VLANs without a reflector; keep the bridge
