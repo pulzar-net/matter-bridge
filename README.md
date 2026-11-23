@@ -311,7 +311,7 @@ MIT. See [LICENSE](LICENSE). rs-matter is Apache-2.0.
 Matter is a trademark of the Connectivity Standards Alliance. This project
 is not affiliated with or certified by the CSA.
 
-## Maintained by Pulzar
+## Maintained by Pulzr
 
-matter-bridge is maintained by [Pulzar](https://pulzr.net), which uses it in
+matter-bridge is maintained by [Pulzr](https://pulzr.net), which uses it in
 its own gateways. It is developed in the open, for anyone to use.

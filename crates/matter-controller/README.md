@@ -21,7 +21,7 @@ rs-matter's futures are not `Send`, so the controller runs on a thread of
 its own; `Controller` is the `Send + Clone` handle to it.
 
 Part of [matter-bridge](https://github.com/pulzar-net/matter-bridge), maintained by
-[Pulzar](https://pulzr.net). See the [user guide](https://oss.pulzr.net/matter-bridge/), the
+[Pulzr](https://pulzr.net). See the [user guide](https://oss.pulzr.net/matter-bridge/), the
 [library guide](https://oss.pulzr.net/matter-bridge/library/index.html) and the
 [API documentation](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html).
 
