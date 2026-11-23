@@ -312,8 +312,10 @@ impl Bridge {
                     .insert(node.node_id, node.clone());
                 self.publish_discovery(&node).await;
                 self.publish_devices().await;
-                self.publish_bridge_event(api::BridgeEvent::NodeUpdated { node: node.into() })
-                    .await;
+                self.publish_bridge_event(api::BridgeEvent::NodeUpdated {
+                    node: Box::new(node.into()),
+                })
+                .await;
             }
             Event::NodeRemoved { node } => {
                 self.clear_retained(node).await;

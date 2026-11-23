@@ -439,7 +439,7 @@ pub enum BridgeEvent {
     )]
     NodeUpdated {
         /// The device as it is now.
-        node: Device,
+        node: Box<Device>,
     },
     /// A device was removed.
     #[serde(rename = "node_removed")]

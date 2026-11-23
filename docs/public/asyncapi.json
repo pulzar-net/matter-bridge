@@ -1,0 +1,3736 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "matter-bridge MQTT API",
+    "version": "0.1.0",
+    "description": "Everything matter-bridge publishes and accepts on MQTT.\n\nTopics here use the default base topic, `matter` (`mqtt.base_topic` in the configuration), and Home Assistant's default discovery prefix, `homeassistant` (`homeassistant.discovery_prefix`). `{device}` is the name a person gave a device, given at commissioning or with `rename` (`node_<node id>` otherwise). Clusters, attributes, commands and events are named in `snake_case` from the Matter data model, or by id in hex where the data model does not know them; requests take a name or a number.\n\nThe bridge publishes and subscribes at QoS 1. Payloads are JSON unless a message says otherwise. Requests go to `matter/bridge/request/<name>`; the answer comes on `matter/bridge/response/<name>`, echoing the request's `transaction` so a client can match the two. Fabric keys, Check-In keys and network credentials never appear on MQTT."
+  },
+  "servers": {
+    "broker": {
+      "host": "localhost:1883",
+      "protocol": "mqtt",
+      "description": "Your MQTT broker: `mqtt.host` and `mqtt.port` in the configuration. The bridge connects with a clean session, its `mqtt.client_id`, and `matter/bridge/state` set to offline as its last will.",
+      "bindings": {
+        "mqtt": {
+          "clientId": "matter-bridge",
+          "cleanSession": true,
+          "lastWill": {
+            "topic": "matter/bridge/state",
+            "qos": 1,
+            "message": "{\"state\":\"offline\"}",
+            "retain": true
+          },
+          "keepAlive": 30
+        }
+      }
+    }
+  },
+  "channels": {
+    "bridgeState": {
+      "address": "matter/bridge/state",
+      "description": "The bridge's availability, retained. `offline` is also the bridge's last will.",
+      "messages": {
+        "BridgeState": {
+          "$ref": "#/components/messages/BridgeState"
+        }
+      }
+    },
+    "bridgeInfo": {
+      "address": "matter/bridge/info",
+      "description": "The bridge and its fabric, retained.",
+      "messages": {
+        "BridgeInfo": {
+          "$ref": "#/components/messages/BridgeInfo"
+        }
+      }
+    },
+    "bridgeDevices": {
+      "address": "matter/bridge/devices",
+      "description": "Every commissioned device and its interview, retained.",
+      "messages": {
+        "BridgeDevices": {
+          "$ref": "#/components/messages/BridgeDevices"
+        }
+      }
+    },
+    "bridgeEvent": {
+      "address": "matter/bridge/event",
+      "description": "Commissioning steps, device updates and removals, availability changes, Check-Ins and software update steps, as they happen. `type` names the event.",
+      "messages": {
+        "Commissioning": {
+          "$ref": "#/components/messages/Commissioning"
+        },
+        "NodeUpdated": {
+          "$ref": "#/components/messages/NodeUpdated"
+        },
+        "NodeRemoved": {
+          "$ref": "#/components/messages/NodeRemoved"
+        },
+        "Availability": {
+          "$ref": "#/components/messages/Availability"
+        },
+        "CheckIn": {
+          "$ref": "#/components/messages/CheckIn"
+        },
+        "Ota": {
+          "$ref": "#/components/messages/Ota"
+        }
+      }
+    },
+    "deviceAvailability": {
+      "address": "matter/{device}/availability",
+      "description": "Whether the bridge's subscription to a device holds, retained. Plain text.",
+      "messages": {
+        "DeviceAvailability": {
+          "$ref": "#/components/messages/DeviceAvailability"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        }
+      }
+    },
+    "attributeValue": {
+      "address": "matter/{device}/{endpoint}/{cluster}/{attribute}",
+      "description": "An attribute's value as the device reports it, retained, updated by the bridge's subscription. An empty retained message clears it when the device is removed or renamed.",
+      "messages": {
+        "AttributeValue": {
+          "$ref": "#/components/messages/AttributeValue"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        },
+        "attribute": {
+          "description": "The attribute's `snake_case` name, or its id in hex.",
+          "examples": [
+            "on_off",
+            "current_level"
+          ]
+        }
+      }
+    },
+    "attributeSet": {
+      "address": "matter/{device}/{endpoint}/{cluster}/{attribute}/set",
+      "description": "Write an attribute.",
+      "messages": {
+        "AttributeWrite": {
+          "$ref": "#/components/messages/AttributeWrite"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        },
+        "attribute": {
+          "description": "The attribute's `snake_case` name, or its id in hex.",
+          "examples": [
+            "on_off",
+            "current_level"
+          ]
+        }
+      }
+    },
+    "clusterSet": {
+      "address": "matter/{device}/{endpoint}/{cluster}/set",
+      "description": "Switch or dim a light or switch: `on_off/set` takes `ON`, `OFF` or `TOGGLE`, `level_control/set` a level from 0 to 254. Other clusters have no `set`.",
+      "messages": {
+        "ClusterSet": {
+          "$ref": "#/components/messages/ClusterSet"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        }
+      }
+    },
+    "deviceEvent": {
+      "address": "matter/{device}/{endpoint}/{cluster}/event/{event}",
+      "description": "An event the device reported.",
+      "messages": {
+        "DeviceEvent": {
+          "$ref": "#/components/messages/DeviceEvent"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        },
+        "event": {
+          "description": "The event's `snake_case` name, or its id in hex.",
+          "examples": [
+            "state_change",
+            "start_up"
+          ]
+        }
+      }
+    },
+    "command": {
+      "address": "matter/{device}/{endpoint}/{cluster}/command/{command}",
+      "description": "Invoke a command on a device's endpoint.",
+      "messages": {
+        "CommandFields": {
+          "$ref": "#/components/messages/CommandFields"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        },
+        "command": {
+          "description": "The command's `snake_case` name, or its id in hex.",
+          "examples": [
+            "toggle",
+            "move_to_level"
+          ]
+        }
+      }
+    },
+    "commandResult": {
+      "address": "matter/{device}/{endpoint}/{cluster}/command/{command}/result",
+      "description": "The outcome of a command sent on the `command` topic.",
+      "messages": {
+        "CommandResult": {
+          "$ref": "#/components/messages/CommandResult"
+        }
+      },
+      "parameters": {
+        "device": {
+          "description": "The device's name, given at commissioning or with `rename` (`node_<node id>` otherwise).",
+          "examples": [
+            "lamp",
+            "node_2"
+          ]
+        },
+        "endpoint": {
+          "description": "The endpoint number.",
+          "examples": [
+            "1"
+          ]
+        },
+        "cluster": {
+          "description": "The cluster's `snake_case` name from the Matter data model, or its id in hex for a cluster the data model does not know.",
+          "examples": [
+            "on_off",
+            "level_control",
+            "0xfff1fc01"
+          ]
+        },
+        "command": {
+          "description": "The command's `snake_case` name, or its id in hex.",
+          "examples": [
+            "toggle",
+            "move_to_level"
+          ]
+        }
+      }
+    },
+    "commissionRequest": {
+      "address": "matter/bridge/request/commission",
+      "description": "Commission a device: found by its pairing code over DNS-SD, or over Bluetooth LE when the bridge has a Bluetooth controller.",
+      "messages": {
+        "CommissionRequest": {
+          "$ref": "#/components/messages/CommissionRequest"
+        }
+      }
+    },
+    "commissionResponse": {
+      "address": "matter/bridge/response/commission",
+      "description": "The answer to `commission`.",
+      "messages": {
+        "CommissionResponse": {
+          "$ref": "#/components/messages/CommissionResponse"
+        }
+      }
+    },
+    "openCommissioningWindowRequest": {
+      "address": "matter/bridge/request/open_commissioning_window",
+      "description": "Open a commissioning window on a device, so another ecosystem can add it too (multi-admin).",
+      "messages": {
+        "OpenCommissioningWindowRequest": {
+          "$ref": "#/components/messages/OpenCommissioningWindowRequest"
+        }
+      }
+    },
+    "openCommissioningWindowResponse": {
+      "address": "matter/bridge/response/open_commissioning_window",
+      "description": "The answer to `open_commissioning_window`.",
+      "messages": {
+        "OpenCommissioningWindowResponse": {
+          "$ref": "#/components/messages/OpenCommissioningWindowResponse"
+        }
+      }
+    },
+    "readRequest": {
+      "address": "matter/bridge/request/read",
+      "description": "Read attributes of a device.",
+      "messages": {
+        "ReadRequest": {
+          "$ref": "#/components/messages/ReadRequest"
+        }
+      }
+    },
+    "readResponse": {
+      "address": "matter/bridge/response/read",
+      "description": "The answer to `read`.",
+      "messages": {
+        "ReadResponse": {
+          "$ref": "#/components/messages/ReadResponse"
+        }
+      }
+    },
+    "writeRequest": {
+      "address": "matter/bridge/request/write",
+      "description": "Write an attribute of a device.",
+      "messages": {
+        "WriteRequest": {
+          "$ref": "#/components/messages/WriteRequest"
+        }
+      }
+    },
+    "writeResponse": {
+      "address": "matter/bridge/response/write",
+      "description": "The answer to `write`.",
+      "messages": {
+        "WriteResponse": {
+          "$ref": "#/components/messages/WriteResponse"
+        }
+      }
+    },
+    "invokeRequest": {
+      "address": "matter/bridge/request/invoke",
+      "description": "Invoke a command on a device.",
+      "messages": {
+        "InvokeRequest": {
+          "$ref": "#/components/messages/InvokeRequest"
+        }
+      }
+    },
+    "invokeResponse": {
+      "address": "matter/bridge/response/invoke",
+      "description": "The answer to `invoke`.",
+      "messages": {
+        "InvokeResponse": {
+          "$ref": "#/components/messages/InvokeResponse"
+        }
+      }
+    },
+    "addToGroupRequest": {
+      "address": "matter/bridge/request/add_to_group",
+      "description": "Put an endpoint of a device in a group.",
+      "messages": {
+        "AddToGroupRequest": {
+          "$ref": "#/components/messages/AddToGroupRequest"
+        }
+      }
+    },
+    "addToGroupResponse": {
+      "address": "matter/bridge/response/add_to_group",
+      "description": "The answer to `add_to_group`.",
+      "messages": {
+        "AddToGroupResponse": {
+          "$ref": "#/components/messages/AddToGroupResponse"
+        }
+      }
+    },
+    "removeFromGroupRequest": {
+      "address": "matter/bridge/request/remove_from_group",
+      "description": "Take an endpoint of a device out of a group.",
+      "messages": {
+        "RemoveFromGroupRequest": {
+          "$ref": "#/components/messages/RemoveFromGroupRequest"
+        }
+      }
+    },
+    "removeFromGroupResponse": {
+      "address": "matter/bridge/response/remove_from_group",
+      "description": "The answer to `remove_from_group`.",
+      "messages": {
+        "RemoveFromGroupResponse": {
+          "$ref": "#/components/messages/RemoveFromGroupResponse"
+        }
+      }
+    },
+    "groupInvokeRequest": {
+      "address": "matter/bridge/request/group_invoke",
+      "description": "Send one multicast command to every member of a group.",
+      "messages": {
+        "GroupInvokeRequest": {
+          "$ref": "#/components/messages/GroupInvokeRequest"
+        }
+      }
+    },
+    "groupInvokeResponse": {
+      "address": "matter/bridge/response/group_invoke",
+      "description": "The answer to `group_invoke`.",
+      "messages": {
+        "GroupInvokeResponse": {
+          "$ref": "#/components/messages/GroupInvokeResponse"
+        }
+      }
+    },
+    "interviewRequest": {
+      "address": "matter/bridge/request/interview",
+      "description": "Read what a device is again.",
+      "messages": {
+        "InterviewRequest": {
+          "$ref": "#/components/messages/InterviewRequest"
+        }
+      }
+    },
+    "interviewResponse": {
+      "address": "matter/bridge/response/interview",
+      "description": "The answer to `interview`.",
+      "messages": {
+        "InterviewResponse": {
+          "$ref": "#/components/messages/InterviewResponse"
+        }
+      }
+    },
+    "renameRequest": {
+      "address": "matter/bridge/request/rename",
+      "description": "Rename a device. Its topics move to the new name.",
+      "messages": {
+        "RenameRequest": {
+          "$ref": "#/components/messages/RenameRequest"
+        }
+      }
+    },
+    "renameResponse": {
+      "address": "matter/bridge/response/rename",
+      "description": "The answer to `rename`.",
+      "messages": {
+        "RenameResponse": {
+          "$ref": "#/components/messages/RenameResponse"
+        }
+      }
+    },
+    "removeRequest": {
+      "address": "matter/bridge/request/remove",
+      "description": "Remove a device from the bridge's fabric and forget it.",
+      "messages": {
+        "RemoveRequest": {
+          "$ref": "#/components/messages/RemoveRequest"
+        }
+      }
+    },
+    "removeResponse": {
+      "address": "matter/bridge/response/remove",
+      "description": "The answer to `remove`.",
+      "messages": {
+        "RemoveResponse": {
+          "$ref": "#/components/messages/RemoveResponse"
+        }
+      }
+    },
+    "discoverRequest": {
+      "address": "matter/bridge/request/discover",
+      "description": "Look for devices that can be commissioned.",
+      "messages": {
+        "DiscoverRequest": {
+          "$ref": "#/components/messages/DiscoverRequest"
+        }
+      }
+    },
+    "discoverResponse": {
+      "address": "matter/bridge/response/discover",
+      "description": "The answer to `discover`.",
+      "messages": {
+        "DiscoverResponse": {
+          "$ref": "#/components/messages/DiscoverResponse"
+        }
+      }
+    },
+    "devicesRequest": {
+      "address": "matter/bridge/request/devices",
+      "description": "Publish `matter/bridge/devices` again.",
+      "messages": {
+        "DevicesRequest": {
+          "$ref": "#/components/messages/DevicesRequest"
+        }
+      }
+    },
+    "devicesResponse": {
+      "address": "matter/bridge/response/devices",
+      "description": "The answer to `devices`.",
+      "messages": {
+        "DevicesResponse": {
+          "$ref": "#/components/messages/DevicesResponse"
+        }
+      }
+    },
+    "otaImagesRequest": {
+      "address": "matter/bridge/request/ota_images",
+      "description": "List the OTA images the bridge offers.",
+      "messages": {
+        "OtaImagesRequest": {
+          "$ref": "#/components/messages/OtaImagesRequest"
+        }
+      }
+    },
+    "otaImagesResponse": {
+      "address": "matter/bridge/response/ota_images",
+      "description": "The answer to `ota_images`.",
+      "messages": {
+        "OtaImagesResponse": {
+          "$ref": "#/components/messages/OtaImagesResponse"
+        }
+      }
+    },
+    "otaUpdateRequest": {
+      "address": "matter/bridge/request/ota_update",
+      "description": "Tell a device to ask the bridge for a software update now.",
+      "messages": {
+        "OtaUpdateRequest": {
+          "$ref": "#/components/messages/OtaUpdateRequest"
+        }
+      }
+    },
+    "otaUpdateResponse": {
+      "address": "matter/bridge/response/ota_update",
+      "description": "The answer to `ota_update`.",
+      "messages": {
+        "OtaUpdateResponse": {
+          "$ref": "#/components/messages/OtaUpdateResponse"
+        }
+      }
+    },
+    "homeAssistantDiscovery": {
+      "address": "homeassistant/{component}/{device_key}/{entity}/config",
+      "description": "Home Assistant MQTT discovery: one retained config per entity, sent when a device is commissioned, interviewed or renamed, and when Home Assistant comes online. An empty retained message removes an entity. Only with `homeassistant.enabled`.",
+      "messages": {
+        "DiscoveryConfig": {
+          "$ref": "#/components/messages/DiscoveryConfig"
+        }
+      },
+      "parameters": {
+        "component": {
+          "description": "The entity type.",
+          "enum": [
+            "light",
+            "switch",
+            "sensor",
+            "binary_sensor"
+          ]
+        },
+        "device_key": {
+          "description": "`matter_<compressed fabric id>_<node id>`, both as 16 lower-case hex digits.",
+          "examples": [
+            "matter_00000000000000ab_0000000000000002"
+          ]
+        },
+        "entity": {
+          "description": "`<endpoint>_<cluster id in hex>`.",
+          "examples": [
+            "1_6",
+            "1_402"
+          ]
+        }
+      }
+    },
+    "homeAssistantStatus": {
+      "address": "homeassistant/status",
+      "description": "Home Assistant's birth and last will (`homeassistant.status_topic`). When it says `online`, the bridge publishes discovery again. Only with `homeassistant.enabled`.",
+      "messages": {
+        "HomeAssistantStatus": {
+          "$ref": "#/components/messages/HomeAssistantStatus"
+        }
+      }
+    }
+  },
+  "operations": {
+    "publishBridgeState": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/bridgeState"
+      },
+      "summary": "The bridge is online or offline",
+      "description": "Published `online` on connecting and `offline` on stopping.",
+      "messages": [
+        {
+          "$ref": "#/channels/bridgeState/messages/BridgeState"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "publishBridgeInfo": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/bridgeInfo"
+      },
+      "summary": "The bridge's version and fabric",
+      "description": "Published on connecting.",
+      "messages": [
+        {
+          "$ref": "#/channels/bridgeInfo/messages/BridgeInfo"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "publishBridgeDevices": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/bridgeDevices"
+      },
+      "summary": "Every device and its interview",
+      "description": "Published on connecting and whenever a device is commissioned, interviewed, renamed or removed.",
+      "messages": [
+        {
+          "$ref": "#/channels/bridgeDevices/messages/BridgeDevices"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "publishBridgeEvent": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/bridgeEvent"
+      },
+      "summary": "Something happened to a device",
+      "description": "Published as each event happens.",
+      "messages": [
+        {
+          "$ref": "#/channels/bridgeEvent/messages/Commissioning"
+        },
+        {
+          "$ref": "#/channels/bridgeEvent/messages/NodeUpdated"
+        },
+        {
+          "$ref": "#/channels/bridgeEvent/messages/NodeRemoved"
+        },
+        {
+          "$ref": "#/channels/bridgeEvent/messages/Availability"
+        },
+        {
+          "$ref": "#/channels/bridgeEvent/messages/CheckIn"
+        },
+        {
+          "$ref": "#/channels/bridgeEvent/messages/Ota"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "publishDeviceAvailability": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/deviceAvailability"
+      },
+      "summary": "The device is reachable or not",
+      "description": "Published when the bridge's subscription to the device starts or lapses.",
+      "messages": [
+        {
+          "$ref": "#/channels/deviceAvailability/messages/DeviceAvailability"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "publishAttributeValue": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/attributeValue"
+      },
+      "summary": "An attribute's value",
+      "description": "Published for each attribute in each subscription report, starting with the priming report.",
+      "messages": [
+        {
+          "$ref": "#/channels/attributeValue/messages/AttributeValue"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "publishDeviceEvent": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/deviceEvent"
+      },
+      "summary": "An event the device reported",
+      "description": "Published for each event in a subscription report.",
+      "messages": [
+        {
+          "$ref": "#/channels/deviceEvent/messages/DeviceEvent"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "publishCommandResult": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/commandResult"
+      },
+      "summary": "The command's response, or its error",
+      "description": "Published once per command.",
+      "messages": [
+        {
+          "$ref": "#/channels/commandResult/messages/CommandResult"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "publishDiscovery": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/homeAssistantDiscovery"
+      },
+      "summary": "A Home Assistant entity",
+      "description": "Published per entity.",
+      "messages": [
+        {
+          "$ref": "#/channels/homeAssistantDiscovery/messages/DiscoveryConfig"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": true
+        }
+      }
+    },
+    "receiveAttributeSet": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/attributeSet"
+      },
+      "summary": "Write an attribute",
+      "description": "JSON in the form the attribute is published in; text that is not JSON is a string.",
+      "messages": [
+        {
+          "$ref": "#/channels/attributeSet/messages/AttributeWrite"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "receiveClusterSet": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/clusterSet"
+      },
+      "summary": "Switch or dim an endpoint",
+      "description": "Plain text or JSON.",
+      "messages": [
+        {
+          "$ref": "#/channels/clusterSet/messages/ClusterSet"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "receiveCommand": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/command"
+      },
+      "summary": "Invoke a command",
+      "description": "The result comes on the `result` topic.",
+      "messages": [
+        {
+          "$ref": "#/channels/command/messages/CommandFields"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "receiveHomeAssistantStatus": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/homeAssistantStatus"
+      },
+      "summary": "Home Assistant started or stopped",
+      "description": "Read only with `homeassistant.enabled`.",
+      "messages": [
+        {
+          "$ref": "#/channels/homeAssistantStatus/messages/HomeAssistantStatus"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "receiveCommission": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/commissionRequest"
+      },
+      "summary": "Commission a device",
+      "description": "Read on `matter/bridge/request/commission`; any other field is ignored. Answered once on `matter/bridge/response/commission`.",
+      "messages": [
+        {
+          "$ref": "#/channels/commissionRequest/messages/CommissionRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendCommission": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/commissionResponse"
+      },
+      "summary": "The device is commissioned",
+      "description": "Published once per `commission` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/commissionResponse/messages/CommissionResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveOpenCommissioningWindow": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/openCommissioningWindowRequest"
+      },
+      "summary": "Let another ecosystem add a device",
+      "description": "Read on `matter/bridge/request/open_commissioning_window`; any other field is ignored. Answered once on `matter/bridge/response/open_commissioning_window`.",
+      "messages": [
+        {
+          "$ref": "#/channels/openCommissioningWindowRequest/messages/OpenCommissioningWindowRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendOpenCommissioningWindow": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/openCommissioningWindowResponse"
+      },
+      "summary": "The window is open, with its pairing code",
+      "description": "Published once per `open_commissioning_window` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/openCommissioningWindowResponse/messages/OpenCommissioningWindowResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveRead": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/readRequest"
+      },
+      "summary": "Read attributes",
+      "description": "Read on `matter/bridge/request/read`; any other field is ignored. Answered once on `matter/bridge/response/read`.",
+      "messages": [
+        {
+          "$ref": "#/channels/readRequest/messages/ReadRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendRead": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/readResponse"
+      },
+      "summary": "The attributes' values",
+      "description": "Published once per `read` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/readResponse/messages/ReadResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveWrite": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/writeRequest"
+      },
+      "summary": "Write an attribute",
+      "description": "Read on `matter/bridge/request/write`; any other field is ignored. Answered once on `matter/bridge/response/write`.",
+      "messages": [
+        {
+          "$ref": "#/channels/writeRequest/messages/WriteRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendWrite": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/writeResponse"
+      },
+      "summary": "The attribute is written",
+      "description": "Published once per `write` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/writeResponse/messages/WriteResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveInvoke": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/invokeRequest"
+      },
+      "summary": "Invoke a command",
+      "description": "Read on `matter/bridge/request/invoke`; any other field is ignored. Answered once on `matter/bridge/response/invoke`.",
+      "messages": [
+        {
+          "$ref": "#/channels/invokeRequest/messages/InvokeRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendInvoke": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/invokeResponse"
+      },
+      "summary": "The command's response",
+      "description": "Published once per `invoke` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/invokeResponse/messages/InvokeResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveAddToGroup": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/addToGroupRequest"
+      },
+      "summary": "Put an endpoint in a group",
+      "description": "Read on `matter/bridge/request/add_to_group`; any other field is ignored. Answered once on `matter/bridge/response/add_to_group`.",
+      "messages": [
+        {
+          "$ref": "#/channels/addToGroupRequest/messages/AddToGroupRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendAddToGroup": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/addToGroupResponse"
+      },
+      "summary": "The endpoint is in the group",
+      "description": "Published once per `add_to_group` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/addToGroupResponse/messages/AddToGroupResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveRemoveFromGroup": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/removeFromGroupRequest"
+      },
+      "summary": "Take an endpoint out of a group",
+      "description": "Read on `matter/bridge/request/remove_from_group`; any other field is ignored. Answered once on `matter/bridge/response/remove_from_group`.",
+      "messages": [
+        {
+          "$ref": "#/channels/removeFromGroupRequest/messages/RemoveFromGroupRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendRemoveFromGroup": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/removeFromGroupResponse"
+      },
+      "summary": "The endpoint left the group",
+      "description": "Published once per `remove_from_group` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/removeFromGroupResponse/messages/RemoveFromGroupResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveGroupInvoke": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/groupInvokeRequest"
+      },
+      "summary": "Send a command to a group",
+      "description": "Read on `matter/bridge/request/group_invoke`; any other field is ignored. Answered once on `matter/bridge/response/group_invoke`.",
+      "messages": [
+        {
+          "$ref": "#/channels/groupInvokeRequest/messages/GroupInvokeRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendGroupInvoke": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/groupInvokeResponse"
+      },
+      "summary": "The group command is sent",
+      "description": "Published once per `group_invoke` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/groupInvokeResponse/messages/GroupInvokeResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveInterview": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/interviewRequest"
+      },
+      "summary": "Interview a device again",
+      "description": "Read on `matter/bridge/request/interview`; any other field is ignored. Answered once on `matter/bridge/response/interview`.",
+      "messages": [
+        {
+          "$ref": "#/channels/interviewRequest/messages/InterviewRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendInterview": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/interviewResponse"
+      },
+      "summary": "The device, interviewed",
+      "description": "Published once per `interview` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/interviewResponse/messages/InterviewResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveRename": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/renameRequest"
+      },
+      "summary": "Rename a device",
+      "description": "Read on `matter/bridge/request/rename`; any other field is ignored. Answered once on `matter/bridge/response/rename`.",
+      "messages": [
+        {
+          "$ref": "#/channels/renameRequest/messages/RenameRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendRename": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/renameResponse"
+      },
+      "summary": "The device is renamed",
+      "description": "Published once per `rename` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/renameResponse/messages/RenameResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveRemove": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/removeRequest"
+      },
+      "summary": "Remove a device",
+      "description": "Read on `matter/bridge/request/remove`; any other field is ignored. Answered once on `matter/bridge/response/remove`.",
+      "messages": [
+        {
+          "$ref": "#/channels/removeRequest/messages/RemoveRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendRemove": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/removeResponse"
+      },
+      "summary": "The device is removed",
+      "description": "Published once per `remove` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/removeResponse/messages/RemoveResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveDiscover": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/discoverRequest"
+      },
+      "summary": "Look for commissionable devices",
+      "description": "Read on `matter/bridge/request/discover`; any other field is ignored. Answered once on `matter/bridge/response/discover`.",
+      "messages": [
+        {
+          "$ref": "#/channels/discoverRequest/messages/DiscoverRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendDiscover": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/discoverResponse"
+      },
+      "summary": "The commissionable devices seen",
+      "description": "Published once per `discover` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/discoverResponse/messages/DiscoverResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveDevices": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/devicesRequest"
+      },
+      "summary": "List the devices",
+      "description": "Read on `matter/bridge/request/devices`; any other field is ignored. Answered once on `matter/bridge/response/devices`.",
+      "messages": [
+        {
+          "$ref": "#/channels/devicesRequest/messages/DevicesRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendDevices": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/devicesResponse"
+      },
+      "summary": "Every device",
+      "description": "Published once per `devices` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/devicesResponse/messages/DevicesResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveOtaImages": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/otaImagesRequest"
+      },
+      "summary": "List the software update images",
+      "description": "Read on `matter/bridge/request/ota_images`; any other field is ignored. Answered once on `matter/bridge/response/ota_images`.",
+      "messages": [
+        {
+          "$ref": "#/channels/otaImagesRequest/messages/OtaImagesRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendOtaImages": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/otaImagesResponse"
+      },
+      "summary": "The images offered",
+      "description": "Published once per `ota_images` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/otaImagesResponse/messages/OtaImagesResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    },
+    "receiveOtaUpdate": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/otaUpdateRequest"
+      },
+      "summary": "Update a device's software",
+      "description": "Read on `matter/bridge/request/ota_update`; any other field is ignored. Answered once on `matter/bridge/response/ota_update`.",
+      "messages": [
+        {
+          "$ref": "#/channels/otaUpdateRequest/messages/OtaUpdateRequest"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1
+        }
+      }
+    },
+    "sendOtaUpdate": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/otaUpdateResponse"
+      },
+      "summary": "The image the device will be offered",
+      "description": "Published once per `ota_update` request, when it is done or has failed, echoing its `transaction`.",
+      "messages": [
+        {
+          "$ref": "#/channels/otaUpdateResponse/messages/OtaUpdateResponse"
+        }
+      ],
+      "bindings": {
+        "mqtt": {
+          "qos": 1,
+          "retain": false
+        }
+      }
+    }
+  },
+  "components": {
+    "messages": {
+      "BridgeState": {
+        "name": "BridgeState",
+        "title": "BridgeState",
+        "summary": "The bridge is online or offline",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "$ref": "#/components/schemas/Availability"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "description": "The bridge's availability, retained on `bridge/state`. The broker\npublishes `offline` as the bridge's last will when the connection drops.",
+          "title": "BridgeState",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "BridgeInfo": {
+        "name": "BridgeInfo",
+        "title": "BridgeInfo",
+        "summary": "The bridge's version and fabric",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "string",
+              "description": "The bridge's version."
+            },
+            "fabric_id": {
+              "type": "string",
+              "description": "The fabric's id, as 16 upper-case hex digits."
+            },
+            "compressed_fabric_id": {
+              "type": "string",
+              "description": "The compressed fabric id, as 16 upper-case hex digits: what the\nfabric's nodes advertise over DNS-SD."
+            },
+            "node_id": {
+              "type": "string",
+              "description": "The bridge's own node id on the fabric, as 16 upper-case hex digits."
+            },
+            "vendor_id": {
+              "type": "integer",
+              "description": "The vendor id the bridge administers nodes as.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          },
+          "required": [
+            "version",
+            "fabric_id",
+            "compressed_fabric_id",
+            "node_id",
+            "vendor_id"
+          ],
+          "description": "The bridge and its fabric, retained on `bridge/info`.",
+          "title": "BridgeInfo",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "BridgeDevices": {
+        "name": "BridgeDevices",
+        "title": "BridgeDevices",
+        "summary": "Every device and its interview",
+        "contentType": "application/json",
+        "payload": {
+          "type": "array",
+          "description": "Every commissioned device, retained on `bridge/devices`. Republished\nwhen one is commissioned, interviewed, renamed or removed.",
+          "title": "BridgeDevices",
+          "items": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "Commissioning": {
+        "name": "Commissioning",
+        "title": "Commissioning",
+        "summary": "A commissioning moved on a step",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "commissioning"
+            },
+            "node": {
+              "type": "integer",
+              "description": "The node id the device is being given.",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "step": {
+              "$ref": "#/components/schemas/CommissionStep"
+            }
+          },
+          "required": [
+            "type",
+            "node",
+            "step"
+          ],
+          "description": "A step of a commissioning, one per step."
+        }
+      },
+      "NodeUpdated": {
+        "name": "NodeUpdated",
+        "title": "NodeUpdated",
+        "summary": "A device was commissioned, interviewed or renamed",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "node_updated"
+            },
+            "node": {
+              "$ref": "#/components/schemas/Device"
+            }
+          },
+          "required": [
+            "type",
+            "node"
+          ],
+          "description": "A device was commissioned, interviewed or renamed."
+        }
+      },
+      "NodeRemoved": {
+        "name": "NodeRemoved",
+        "title": "NodeRemoved",
+        "summary": "A device was removed",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "node_removed"
+            },
+            "node": {
+              "type": "integer",
+              "description": "Its node id.",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "type",
+            "node"
+          ],
+          "description": "A device was removed."
+        }
+      },
+      "Availability": {
+        "name": "Availability",
+        "title": "Availability",
+        "summary": "A device became reachable or unreachable",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "availability"
+            },
+            "node": {
+              "type": "integer",
+              "description": "Its node id.",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "online": {
+              "type": "boolean",
+              "description": "Whether the subscription holds."
+            }
+          },
+          "required": [
+            "type",
+            "node",
+            "online"
+          ],
+          "description": "The bridge's subscription to a device started or lapsed."
+        }
+      },
+      "CheckIn": {
+        "name": "CheckIn",
+        "title": "CheckIn",
+        "summary": "A sleeping device checked in",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "check_in"
+            },
+            "node": {
+              "type": "integer",
+              "description": "Its node id.",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "type",
+            "node"
+          ],
+          "description": "A sleeping device woke and checked in: its subscription is renewed\nand requests that waited for it go out."
+        }
+      },
+      "Ota": {
+        "name": "Ota",
+        "title": "Ota",
+        "summary": "A software update moved on a step",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ota"
+            },
+            "node": {
+              "type": "integer",
+              "description": "Its node id.",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "step": {
+              "$ref": "#/components/schemas/OtaStep"
+            },
+            "version": {
+              "type": "integer",
+              "description": "The version offered, being applied, or now running.",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "type",
+            "node",
+            "step",
+            "version"
+          ],
+          "description": "A step of a device's software update from the bridge."
+        }
+      },
+      "DeviceAvailability": {
+        "name": "DeviceAvailability",
+        "title": "DeviceAvailability",
+        "summary": "The device is reachable or not",
+        "contentType": "text/plain",
+        "payload": {
+          "$ref": "#/components/schemas/Availability"
+        }
+      },
+      "AttributeValue": {
+        "name": "AttributeValue",
+        "title": "AttributeValue",
+        "summary": "An attribute's value",
+        "contentType": "application/json",
+        "payload": {
+          "description": "An attribute's value, retained on\n`<device>/<endpoint>/<cluster>/<attribute>`, as the device reports it:\n`measured_value` 2150 is 21.50 °C. Integers, enumerations and bitmaps are\nnumbers, octet strings hex strings, structures objects keyed by field\nname, lists arrays.",
+          "title": "AttributeValue",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DeviceEvent": {
+        "name": "DeviceEvent",
+        "title": "DeviceEvent",
+        "summary": "An event the device reported",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "integer",
+              "description": "The device's event number. When the bridge's subscription is\nrenewed, it asks for events after the last number seen.",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "data": {
+              "description": "The event's fields, by the data model's names."
+            }
+          },
+          "required": [
+            "number",
+            "data"
+          ],
+          "description": "An event a device reported, on\n`<device>/<endpoint>/<cluster>/event/<event>`. Not retained.",
+          "title": "DeviceEvent",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "CommandResult": {
+        "name": "CommandResult",
+        "title": "CommandResult",
+        "summary": "The command's response, or its error",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The response command's fields, or `null` for a plain success, when\n`status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The outcome of a command sent on a device's `command/<command>` topic,\non `.../command/<command>/result`. Not retained.",
+          "title": "CommandResult",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DiscoveryConfig": {
+        "name": "DiscoveryConfig",
+        "title": "DiscoveryConfig",
+        "summary": "A Home Assistant entity for one of a device's endpoints",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The entity's name."
+            },
+            "unique_id": {
+              "type": "string",
+              "description": "Unique across Home Assistant:\n`matter_<compressed fabric id>_<node id>_<endpoint>_<cluster>`."
+            },
+            "object_id": {
+              "type": "string",
+              "description": "The entity id Home Assistant derives: `<device>_<endpoint>_<cluster>`."
+            },
+            "device": {
+              "$ref": "#/components/schemas/DiscoveryDevice"
+            },
+            "availability": {
+              "type": "array",
+              "description": "The bridge's and the device's availability topics.",
+              "items": {
+                "$ref": "#/components/schemas/DiscoveryAvailability"
+              }
+            },
+            "availability_mode": {
+              "type": "string",
+              "description": "`all`: the entity is available while both are."
+            },
+            "state_topic": {
+              "type": "string",
+              "description": "The attribute topic the state is read from."
+            },
+            "value_template": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Picks the state out of the attribute's value."
+            },
+            "state_value_template": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Lights: turns the on/off attribute into `ON` or `OFF`."
+            },
+            "command_topic": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Lights and switches: the endpoint's `on_off/set` topic."
+            },
+            "state_on": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Switches: the state that means on."
+            },
+            "state_off": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Switches: the state that means off."
+            },
+            "brightness_command_topic": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Dimmable lights: the endpoint's `level_control/set` topic."
+            },
+            "brightness_state_topic": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Dimmable lights: the current level's topic."
+            },
+            "brightness_scale": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Dimmable lights: the highest level, 254.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "brightness_value_template": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Dimmable lights: reads the level, 0 while it is null."
+            },
+            "device_class": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Home Assistant's device class: `temperature`, `door`, `battery`..."
+            },
+            "unit_of_measurement": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The reading's unit, after the template's scaling."
+            },
+            "state_class": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "`measurement` for sensors."
+            },
+            "entity_category": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "`diagnostic` for the battery."
+            }
+          },
+          "required": [
+            "name",
+            "unique_id",
+            "object_id",
+            "device",
+            "availability",
+            "availability_mode",
+            "state_topic"
+          ],
+          "description": "A Home Assistant MQTT discovery config, retained on\n`<discovery_prefix>/<component>/<device key>/<endpoint>_<cluster>/config`:\none entity per light, switch, sensor or battery. An empty retained\nmessage removes the entity. Keys are Home Assistant's; see its MQTT\nintegration's documentation.",
+          "title": "DiscoveryConfig",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "AttributeWrite": {
+        "name": "AttributeWrite",
+        "title": "AttributeWrite",
+        "summary": "Write an attribute",
+        "contentType": "application/json",
+        "payload": {
+          "description": "A new value for an attribute, on\n`<device>/<endpoint>/<cluster>/<attribute>/set`, as JSON in the same\nform the attribute is published in. An enumeration may be given by name.",
+          "title": "AttributeWrite",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "ClusterSet": {
+        "name": "ClusterSet",
+        "title": "ClusterSet",
+        "summary": "Switch or dim an endpoint",
+        "contentType": "application/json",
+        "payload": {
+          "description": "A value for an on/off or level control endpoint, on\n`<device>/<endpoint>/on_off/set` (`ON`, `OFF`, `TOGGLE`, or `true` and\n`false`) or `<device>/<endpoint>/level_control/set` (a level, 0 to 254,\nswitching the light on). Plain text or JSON.",
+          "title": "ClusterSet",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "CommandFields": {
+        "name": "CommandFields",
+        "title": "CommandFields",
+        "summary": "Invoke a command",
+        "contentType": "application/json",
+        "payload": {
+          "description": "A command's fields, on `<device>/<endpoint>/<cluster>/command/<command>`:\nan object keyed by the data model's field names, or an empty message for\na command without fields. A required field that may be null can be left\nout.",
+          "title": "CommandFields",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "HomeAssistantStatus": {
+        "name": "HomeAssistantStatus",
+        "title": "HomeAssistantStatus",
+        "summary": "Home Assistant started or stopped",
+        "contentType": "text/plain",
+        "payload": {
+          "$ref": "#/components/schemas/Availability"
+        }
+      },
+      "CommissionRequest": {
+        "name": "CommissionRequest",
+        "title": "CommissionRequest",
+        "summary": "Commission a device",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "The QR code's payload (`MT:...`) or the manual pairing code,\nwith or without dashes."
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The device's name; `node_<node id>` if left out. It must not be\n`bridge`, or contain `/`, `#` or `+`.",
+              "default": null
+            },
+            "address": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The device's address as `ip:port`, to skip discovery.",
+              "default": null
+            },
+            "timeout": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Seconds to look for the device; `matter.discovery_timeout` if\nleft out.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "wifi": {
+              "description": "For a Wi-Fi device reached over Bluetooth: the network to give\nit. Never stored or logged.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/WiFiCredentials"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "thread_dataset": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "For a Thread device reached over Bluetooth: the network's active\noperational dataset, as hex. Never stored or logged.",
+              "default": null
+            },
+            "thread_dataset_url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Where to read the Thread dataset instead: an OpenThread border\nrouter's REST API, e.g.\n`http://127.0.0.1:8081/node/dataset/active`. Without either,\n`matter.thread_dataset_url` is used.",
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "code"
+          ],
+          "description": "Commission a device, on `bridge/request/commission`: found by its\npairing code over DNS-SD, or over Bluetooth LE when the bridge has a\nBluetooth controller and the device is not on the network yet.",
+          "title": "CommissionRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "CommissionResponse": {
+        "name": "CommissionResponse",
+        "title": "CommissionResponse",
+        "summary": "The device is commissioned",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Device"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `commission`: the device, interviewed.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "CommissionResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OpenCommissioningWindowRequest": {
+        "name": "OpenCommissioningWindowRequest",
+        "title": "OpenCommissioningWindowRequest",
+        "summary": "Let another ecosystem add a device",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "timeout": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Seconds the window stays open, 180 to 900; 300 if left out.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device"
+          ],
+          "description": "Open a commissioning window on a device, on\n`bridge/request/open_commissioning_window`, so another\nadministrator (Apple Home, Google Home, Home Assistant) can add it\ntoo.",
+          "title": "OpenCommissioningWindowRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OpenCommissioningWindowResponse": {
+        "name": "OpenCommissioningWindowResponse",
+        "title": "OpenCommissioningWindowResponse",
+        "summary": "The window is open, with its pairing code",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CommissioningWindow"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `open_commissioning_window`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "OpenCommissioningWindowResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "ReadRequest": {
+        "name": "ReadRequest",
+        "title": "ReadRequest",
+        "summary": "Read attributes",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "endpoint": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "The endpoint.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "cluster": {
+              "description": "The cluster, by name or id.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "attribute": {
+              "description": "The attribute, by name (with `cluster`) or id.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Id"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device"
+          ],
+          "description": "Read attributes, on `bridge/request/read`. Any of `endpoint`,\n`cluster` and `attribute` left out means all of them.",
+          "title": "ReadRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "ReadResponse": {
+        "name": "ReadResponse",
+        "title": "ReadResponse",
+        "summary": "The attributes' values",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "The result, when `status` is `ok`.",
+              "items": {
+                "$ref": "#/components/schemas/ReadValue"
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `read`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "ReadResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "WriteRequest": {
+        "name": "WriteRequest",
+        "title": "WriteRequest",
+        "summary": "Write an attribute",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "endpoint": {
+              "type": "integer",
+              "description": "The endpoint.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "cluster": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "attribute": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "value": {
+              "description": "The new value, in the form the attribute is published in."
+            },
+            "timed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Milliseconds for a timed write, which some clusters require\n(door locks, for example).",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device",
+            "endpoint",
+            "cluster",
+            "attribute",
+            "value"
+          ],
+          "description": "Write an attribute, on `bridge/request/write`.",
+          "title": "WriteRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "WriteResponse": {
+        "name": "WriteResponse",
+        "title": "WriteResponse",
+        "summary": "The attribute is written",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": "null",
+              "description": "The result, when `status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `write`; `data` is `null`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "WriteResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "InvokeRequest": {
+        "name": "InvokeRequest",
+        "title": "InvokeRequest",
+        "summary": "Invoke a command",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "endpoint": {
+              "type": "integer",
+              "description": "The endpoint.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "cluster": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "command": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "fields": {
+              "description": "The command's fields, by the data model's names.",
+              "default": null
+            },
+            "timed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Milliseconds for a timed invoke, which some commands require.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device",
+            "endpoint",
+            "cluster",
+            "command"
+          ],
+          "description": "Invoke a command, on `bridge/request/invoke`.",
+          "title": "InvokeRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "InvokeResponse": {
+        "name": "InvokeResponse",
+        "title": "InvokeResponse",
+        "summary": "The command's response",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `invoke`: the response command's fields, or `null`\nfor a plain success.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "InvokeResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "AddToGroupRequest": {
+        "name": "AddToGroupRequest",
+        "title": "AddToGroupRequest",
+        "summary": "Put an endpoint in a group",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "endpoint": {
+              "type": "integer",
+              "description": "The endpoint.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "group": {
+              "type": "integer",
+              "description": "The group, 1 to 65535.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The group's name on the device.",
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device",
+            "endpoint",
+            "group"
+          ],
+          "description": "Put an endpoint of a device in a group, on\n`bridge/request/add_to_group`: the device gets the fabric's group\nkey and the group, with access for the group to operate the\nendpoint.",
+          "title": "AddToGroupRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "AddToGroupResponse": {
+        "name": "AddToGroupResponse",
+        "title": "AddToGroupResponse",
+        "summary": "The endpoint is in the group",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": "null",
+              "description": "The result, when `status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `add_to_group`; `data` is `null`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "AddToGroupResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RemoveFromGroupRequest": {
+        "name": "RemoveFromGroupRequest",
+        "title": "RemoveFromGroupRequest",
+        "summary": "Take an endpoint out of a group",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "endpoint": {
+              "type": "integer",
+              "description": "The endpoint.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "group": {
+              "type": "integer",
+              "description": "The group, 1 to 65535.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device",
+            "endpoint",
+            "group"
+          ],
+          "description": "Take an endpoint of a device out of a group, on\n`bridge/request/remove_from_group`.",
+          "title": "RemoveFromGroupRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RemoveFromGroupResponse": {
+        "name": "RemoveFromGroupResponse",
+        "title": "RemoveFromGroupResponse",
+        "summary": "The endpoint left the group",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": "null",
+              "description": "The result, when `status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `remove_from_group`; `data` is `null`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "RemoveFromGroupResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "GroupInvokeRequest": {
+        "name": "GroupInvokeRequest",
+        "title": "GroupInvokeRequest",
+        "summary": "Send a command to a group",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "integer",
+              "description": "The group, 1 to 65535.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "cluster": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "command": {
+              "$ref": "#/components/schemas/Id"
+            },
+            "fields": {
+              "description": "The command's fields, by the data model's names.",
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "group",
+            "cluster",
+            "command"
+          ],
+          "description": "Send one multicast command to every member of a group, on\n`bridge/request/group_invoke`. Group commands are not acknowledged;\neach member's new state comes back through its subscription.",
+          "title": "GroupInvokeRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "GroupInvokeResponse": {
+        "name": "GroupInvokeResponse",
+        "title": "GroupInvokeResponse",
+        "summary": "The group command is sent",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": "null",
+              "description": "The result, when `status` is `ok`."
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `group_invoke`, once the message is sent; `data` is\n`null`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "GroupInvokeResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "InterviewRequest": {
+        "name": "InterviewRequest",
+        "title": "InterviewRequest",
+        "summary": "Interview a device again",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device"
+          ],
+          "description": "Read what a device is again, on `bridge/request/interview`.",
+          "title": "InterviewRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "InterviewResponse": {
+        "name": "InterviewResponse",
+        "title": "InterviewResponse",
+        "summary": "The device, interviewed",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Device"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `interview`: the device as it is now.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "InterviewResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RenameRequest": {
+        "name": "RenameRequest",
+        "title": "RenameRequest",
+        "summary": "Rename a device",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "to": {
+              "type": "string",
+              "description": "The new name. It must not be `bridge`, or contain `/`, `#` or\n`+`."
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device",
+            "to"
+          ],
+          "description": "Rename a device, on `bridge/request/rename`. Its topics move to the\nnew name; values come back under it with the next report.",
+          "title": "RenameRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RenameResponse": {
+        "name": "RenameResponse",
+        "title": "RenameResponse",
+        "summary": "The device is renamed",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Device"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `rename`: the device as it is now.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "RenameResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RemoveRequest": {
+        "name": "RemoveRequest",
+        "title": "RemoveRequest",
+        "summary": "Remove a device",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "force": {
+              "type": "boolean",
+              "description": "Forget the device even if it cannot be reached.",
+              "default": false
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device"
+          ],
+          "description": "Remove a device, on `bridge/request/remove`: the bridge takes its\nfabric off the device, then forgets it.",
+          "title": "RemoveRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "RemoveResponse": {
+        "name": "RemoveResponse",
+        "title": "RemoveResponse",
+        "summary": "The device is removed",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Removed"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `remove`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "RemoveResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DiscoverRequest": {
+        "name": "DiscoverRequest",
+        "title": "DiscoverRequest",
+        "summary": "Look for commissionable devices",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "timeout": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "description": "Seconds to look; 5 if left out.",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535,
+              "default": null
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "description": "Look for devices that can be commissioned, on\n`bridge/request/discover`.",
+          "title": "DiscoverRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DiscoverResponse": {
+        "name": "DiscoverResponse",
+        "title": "DiscoverResponse",
+        "summary": "The commissionable devices seen",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "The result, when `status` is `ok`.",
+              "items": {
+                "$ref": "#/components/schemas/Commissionable"
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `discover`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "DiscoverResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DevicesRequest": {
+        "name": "DevicesRequest",
+        "title": "DevicesRequest",
+        "summary": "List the devices",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "description": "Publish `bridge/devices` again, on `bridge/request/devices`, and\nanswer with the same list.",
+          "title": "DevicesRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "DevicesResponse": {
+        "name": "DevicesResponse",
+        "title": "DevicesResponse",
+        "summary": "Every device",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "The result, when `status` is `ok`.",
+              "items": {
+                "$ref": "#/components/schemas/Device"
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `devices`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "DevicesResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OtaImagesRequest": {
+        "name": "OtaImagesRequest",
+        "title": "OtaImagesRequest",
+        "summary": "List the software update images",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "description": "List the OTA images the bridge offers, on\n`bridge/request/ota_images`.",
+          "title": "OtaImagesRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OtaImagesResponse": {
+        "name": "OtaImagesResponse",
+        "title": "OtaImagesResponse",
+        "summary": "The images offered",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "description": "The result, when `status` is `ok`.",
+              "items": {
+                "$ref": "#/components/schemas/OtaImage"
+              }
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `ota_images`.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "OtaImagesResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OtaUpdateRequest": {
+        "name": "OtaUpdateRequest",
+        "title": "OtaUpdateRequest",
+        "summary": "Update a device's software",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The device, by name or node id."
+            },
+            "transaction": {
+              "description": "Any value; the response echoes it, so a client can match the\ntwo."
+            }
+          },
+          "required": [
+            "device"
+          ],
+          "description": "Tell a device to ask the bridge for a software update now, on\n`bridge/request/ota_update`. It downloads the image over BDX and\napplies it; `ota` bridge events follow.",
+          "title": "OtaUpdateRequest",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      },
+      "OtaUpdateResponse": {
+        "name": "OtaUpdateResponse",
+        "title": "OtaUpdateResponse",
+        "summary": "The image the device will be offered",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "data": {
+              "description": "The result, when `status` is `ok`.",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OtaImage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What went wrong, when `status` is `error`."
+            },
+            "transaction": {
+              "description": "The request's `transaction`, echoed when it had one."
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "description": "The response to `ota_update`: the image the device will be offered,\nor `null` (and no announcement) when none is newer.\n\nA response is published once per request, to\n`bridge/response/<request>`, and is not retained.",
+          "title": "OtaUpdateResponse",
+          "$schema": "https://json-schema.org/draft/2020-12/schema"
+        }
+      }
+    },
+    "schemas": {
+      "Availability": {
+        "description": "Online or offline.",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Running, or reachable.",
+            "const": "online"
+          },
+          {
+            "type": "string",
+            "description": "Stopped, or not reachable.",
+            "const": "offline"
+          }
+        ]
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "type": "integer",
+            "description": "Its operational node id on the bridge's fabric.",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string",
+            "description": "The name it is published under: given at commissioning or with\n`rename`, `node_<node id>` otherwise."
+          },
+          "basic": {
+            "$ref": "#/components/schemas/BasicInfo"
+          },
+          "endpoints": {
+            "type": "object",
+            "description": "Its endpoints, by endpoint number, from the Descriptor cluster.",
+            "additionalProperties": false,
+            "patternProperties": {
+              "^\\d+$": {
+                "$ref": "#/components/schemas/Endpoint"
+              }
+            }
+          },
+          "interviewed": {
+            "type": "boolean",
+            "description": "Whether the interview has completed."
+          },
+          "commissioned_at": {
+            "type": "integer",
+            "description": "When it was commissioned, in seconds since the Unix epoch.",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "node_id",
+          "name",
+          "basic",
+          "endpoints",
+          "interviewed",
+          "commissioned_at"
+        ],
+        "description": "A commissioned device and what its interview found."
+      },
+      "BasicInfo": {
+        "type": "object",
+        "properties": {
+          "vendor_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The vendor id.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "vendor_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The vendor's name."
+          },
+          "product_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The product id.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "product_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The product's name."
+          },
+          "node_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The label a person set on the device itself."
+          },
+          "hardware_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The hardware version, as text."
+          },
+          "software_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The software version, as text."
+          },
+          "serial_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The serial number."
+          },
+          "unique_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An id stable across factory resets."
+          }
+        },
+        "description": "What a device's Basic Information cluster says. Each is `null` until the\ninterview reads it, or when the device does not have it."
+      },
+      "Endpoint": {
+        "type": "object",
+        "properties": {
+          "device_types": {
+            "type": "array",
+            "description": "What the endpoint is.",
+            "items": {
+              "$ref": "#/components/schemas/DeviceType"
+            }
+          },
+          "server_clusters": {
+            "type": "array",
+            "description": "The clusters it serves, by id: their attributes are published.",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "client_clusters": {
+            "type": "array",
+            "description": "The clusters it is a client of, by id: it sends their commands, as a\nswitch does.",
+            "items": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "parts": {
+            "type": "array",
+            "description": "The endpoints it is composed of.",
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            }
+          }
+        },
+        "required": [
+          "device_types",
+          "server_clusters",
+          "client_clusters",
+          "parts"
+        ],
+        "description": "An endpoint of a device."
+      },
+      "DeviceType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The device type id: `256` (`0x0100`) for an On/Off Light, for\nexample.",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "description": "Its revision.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "id",
+          "revision"
+        ],
+        "description": "A Matter device type an endpoint is."
+      },
+      "CommissionStep": {
+        "description": "A step of a commissioning.",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Looking for the device, over DNS-SD or Bluetooth LE.",
+            "const": "discovery"
+          },
+          {
+            "type": "string",
+            "description": "Opening a session with the pairing code (PASE).",
+            "const": "pase"
+          },
+          {
+            "type": "string",
+            "description": "Arming the device's fail-safe.",
+            "const": "arm_fail_safe"
+          },
+          {
+            "type": "string",
+            "description": "Checking the device's attestation.",
+            "const": "device_attestation"
+          },
+          {
+            "type": "string",
+            "description": "Asking the device for its operational key.",
+            "const": "csr_request"
+          },
+          {
+            "type": "string",
+            "description": "Giving the device the fabric's root certificate.",
+            "const": "add_trusted_root_certificate"
+          },
+          {
+            "type": "string",
+            "description": "Giving the device its operational certificate.",
+            "const": "add_noc"
+          },
+          {
+            "type": "string",
+            "description": "Finding the device on its operational network.",
+            "const": "find_operational"
+          },
+          {
+            "type": "string",
+            "description": "Giving a device reached over Bluetooth its Thread or Wi-Fi network.",
+            "const": "network_setup"
+          },
+          {
+            "type": "string",
+            "description": "Waiting for that device to join the network.",
+            "const": "network_connect"
+          },
+          {
+            "type": "string",
+            "description": "Completing the commissioning over the operational session (CASE).",
+            "const": "commissioning_complete"
+          },
+          {
+            "type": "string",
+            "description": "Closing the commissioning's sessions.",
+            "const": "cleanup"
+          },
+          {
+            "type": "string",
+            "description": "Reading what the device is.",
+            "const": "interview"
+          }
+        ]
+      },
+      "OtaStep": {
+        "description": "A step of a software update, as the bridge sees it. The device's own OTA\nSoftware Update Requestor events tell the download's progress.",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "The device asked for an update and was offered `version`.",
+            "const": "offered"
+          },
+          {
+            "type": "string",
+            "description": "The device downloaded it and was told to apply it.",
+            "const": "applying"
+          },
+          {
+            "type": "string",
+            "description": "The device reports it now runs `version`.",
+            "const": "applied"
+          }
+        ]
+      },
+      "Status": {
+        "description": "`ok` or `error`.",
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Done; `data` has the result.",
+            "const": "ok"
+          },
+          {
+            "type": "string",
+            "description": "Not done; `error` says why.",
+            "const": "error"
+          }
+        ]
+      },
+      "DiscoveryDevice": {
+        "type": "object",
+        "properties": {
+          "identifiers": {
+            "type": "array",
+            "description": "`matter_<compressed fabric id>_<node id>`.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string",
+            "description": "The device's name."
+          },
+          "manufacturer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The vendor's name, from Basic Information."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The product's name."
+          },
+          "sw_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The software version."
+          },
+          "hw_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The hardware version."
+          },
+          "serial_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The serial number."
+          },
+          "via_device": {
+            "type": "string",
+            "description": "The bridge: `matter_bridge_<compressed fabric id>`."
+          }
+        },
+        "required": [
+          "identifiers",
+          "name",
+          "via_device"
+        ],
+        "description": "The device an entity belongs to, in Home Assistant's device registry."
+      },
+      "DiscoveryAvailability": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "The topic."
+          },
+          "value_template": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Picks `online` or `offline` out of the payload, for `bridge/state`."
+          }
+        },
+        "required": [
+          "topic"
+        ],
+        "description": "An availability topic Home Assistant watches."
+      },
+      "WiFiCredentials": {
+        "type": "object",
+        "properties": {
+          "ssid": {
+            "type": "string",
+            "description": "The network's name."
+          },
+          "password": {
+            "type": "string",
+            "description": "Its passphrase; empty or left out for an open network.",
+            "default": ""
+          }
+        },
+        "required": [
+          "ssid"
+        ],
+        "description": "A Wi-Fi network to give a device."
+      },
+      "CommissioningWindow": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "integer",
+            "description": "The device's node id.",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "manual_code": {
+            "type": "string",
+            "description": "The pairing code to enter in the other app, `XXXX-XXX-XXXX`."
+          },
+          "qr_code": {
+            "type": "string",
+            "description": "The same as a QR code payload (`MT:...`)."
+          },
+          "discriminator": {
+            "type": "integer",
+            "description": "The discriminator the device advertises while the window is open.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Seconds the window stays open.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "node",
+          "manual_code",
+          "qr_code",
+          "discriminator",
+          "timeout"
+        ],
+        "description": "An open commissioning window."
+      },
+      "Id": {
+        "description": "A cluster, attribute or command: its `snake_case` name from the data\nmodel (any case, with or without underscores), or its id as a number.",
+        "anyOf": [
+          {
+            "type": "integer",
+            "description": "The id.",
+            "format": "uint32",
+            "minimum": 0
+          },
+          {
+            "type": "string",
+            "description": "The name, or the id as `0x` hex or decimal text."
+          }
+        ]
+      },
+      "ReadValue": {
+        "type": "object",
+        "properties": {
+          "endpoint": {
+            "type": "integer",
+            "description": "The endpoint.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "cluster": {
+            "type": "string",
+            "description": "The cluster's name, or its id in hex."
+          },
+          "attribute": {
+            "type": "string",
+            "description": "The attribute's name, or its id in hex."
+          },
+          "value": {
+            "description": "Its value, `null` when `status` says why there is none."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The status the device gave instead of a value, such as\n`UnsupportedAttribute`; `null` for a value."
+          }
+        },
+        "required": [
+          "endpoint",
+          "cluster",
+          "attribute",
+          "value"
+        ],
+        "description": "An attribute read."
+      },
+      "Removed": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "integer",
+            "description": "Its node id.",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "node"
+        ],
+        "description": "A device removed."
+      },
+      "Commissionable": {
+        "type": "object",
+        "properties": {
+          "instance": {
+            "type": "string",
+            "description": "Its DNS-SD instance name."
+          },
+          "addresses": {
+            "type": "array",
+            "description": "Its addresses, as `ip:port`.",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "instance",
+          "addresses"
+        ],
+        "description": "A device that can be commissioned, seen over DNS-SD."
+      },
+      "OtaImage": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "The file's name."
+          },
+          "vendor_id": {
+            "type": "integer",
+            "description": "The vendor it is for; 0 for any.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "product_id": {
+            "type": "integer",
+            "description": "The product it is for; 0 for any.",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "version": {
+            "type": "integer",
+            "description": "The software version it installs.",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "version_str": {
+            "type": "string",
+            "description": "The version as text."
+          },
+          "min_applicable_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The oldest version it applies on top of.",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "max_applicable_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The newest version it applies on top of.",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "description": "The file's size in bytes.",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "file",
+          "vendor_id",
+          "product_id",
+          "version",
+          "version_str",
+          "size"
+        ],
+        "description": "A Matter OTA image file in `matter.ota_dir`."
+      }
+    }
+  }
+}
