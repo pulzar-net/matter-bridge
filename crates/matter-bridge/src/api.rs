@@ -739,7 +739,9 @@ impl std::fmt::Debug for WiFiCredentials {
 
 response!(
     /// The response to `commission`: the device, interviewed.
-    CommissionResponse, Device, "The device is commissioned"
+    CommissionResponse,
+    Device,
+    "The device is commissioned"
 );
 
 request!(
@@ -786,7 +788,9 @@ impl From<matter_controller::CommissioningWindow> for CommissioningWindow {
 
 response!(
     /// The response to `open_commissioning_window`.
-    OpenCommissioningWindowResponse, CommissioningWindow, "The window is open, with its pairing code"
+    OpenCommissioningWindowResponse,
+    CommissioningWindow,
+    "The window is open, with its pairing code"
 );
 
 request!(
@@ -826,7 +830,9 @@ pub struct ReadValue {
 
 response!(
     /// The response to `read`.
-    ReadResponse, Vec<ReadValue>, "The attributes' values"
+    ReadResponse,
+    Vec<ReadValue>,
+    "The attributes' values"
 );
 
 request!(
@@ -851,7 +857,9 @@ request!(
 
 response!(
     /// The response to `write`; `data` is `null`.
-    WriteResponse, (), "The attribute is written"
+    WriteResponse,
+    (),
+    "The attribute is written"
 );
 
 request!(
@@ -877,7 +885,9 @@ request!(
 response!(
     /// The response to `invoke`: the response command's fields, or `null`
     /// for a plain success.
-    InvokeResponse, Json, "The command's response"
+    InvokeResponse,
+    Json,
+    "The command's response"
 );
 
 request!(
@@ -900,7 +910,9 @@ request!(
 
 response!(
     /// The response to `add_to_group`; `data` is `null`.
-    AddToGroupResponse, (), "The endpoint is in the group"
+    AddToGroupResponse,
+    (),
+    "The endpoint is in the group"
 );
 
 request!(
@@ -918,7 +930,9 @@ request!(
 
 response!(
     /// The response to `remove_from_group`; `data` is `null`.
-    RemoveFromGroupResponse, (), "The endpoint left the group"
+    RemoveFromGroupResponse,
+    (),
+    "The endpoint left the group"
 );
 
 request!(
@@ -941,7 +955,9 @@ request!(
 response!(
     /// The response to `group_invoke`, once the message is sent; `data` is
     /// `null`.
-    GroupInvokeResponse, (), "The group command is sent"
+    GroupInvokeResponse,
+    (),
+    "The group command is sent"
 );
 
 request!(
@@ -954,7 +970,9 @@ request!(
 
 response!(
     /// The response to `interview`: the device as it is now.
-    InterviewResponse, Device, "The device, interviewed"
+    InterviewResponse,
+    Device,
+    "The device, interviewed"
 );
 
 request!(
@@ -971,7 +989,9 @@ request!(
 
 response!(
     /// The response to `rename`: the device as it is now.
-    RenameResponse, Device, "The device is renamed"
+    RenameResponse,
+    Device,
+    "The device is renamed"
 );
 
 request!(
@@ -996,7 +1016,9 @@ pub struct Removed {
 
 response!(
     /// The response to `remove`.
-    RemoveResponse, Removed, "The device is removed"
+    RemoveResponse,
+    Removed,
+    "The device is removed"
 );
 
 request!(
@@ -1030,7 +1052,9 @@ impl From<matter_controller::Commissionable> for Commissionable {
 
 response!(
     /// The response to `discover`.
-    DiscoverResponse, Vec<Commissionable>, "The commissionable devices seen"
+    DiscoverResponse,
+    Vec<Commissionable>,
+    "The commissionable devices seen"
 );
 
 request!(
@@ -1041,7 +1065,9 @@ request!(
 
 response!(
     /// The response to `devices`.
-    DevicesResponse, Vec<Device>, "Every device"
+    DevicesResponse,
+    Vec<Device>,
+    "Every device"
 );
 
 request!(
@@ -1091,7 +1117,9 @@ impl From<matter_controller::OtaImage> for OtaImage {
 
 response!(
     /// The response to `ota_images`.
-    OtaImagesResponse, Vec<OtaImage>, "The images offered"
+    OtaImagesResponse,
+    Vec<OtaImage>,
+    "The images offered"
 );
 
 request!(
@@ -1107,7 +1135,9 @@ request!(
 response!(
     /// The response to `ota_update`: the image the device will be offered,
     /// or `null` (and no announcement) when none is newer.
-    OtaUpdateResponse, Option<OtaImage>, "The image the device will be offered"
+    OtaUpdateResponse,
+    Option<OtaImage>,
+    "The image the device will be offered"
 );
 
 // ---------------------------------------------------------------------------
