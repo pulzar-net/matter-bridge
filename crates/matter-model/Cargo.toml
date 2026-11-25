@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/matter-model"
+readme = "README.md"
+include = ["src/**", "build.rs", "README.md", "LICENSE"]
 keywords = ["matter", "tlv", "json", "smart-home"]
 categories = ["encoding", "network-programming"]
 

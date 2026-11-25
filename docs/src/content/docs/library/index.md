@@ -7,11 +7,11 @@ matter-bridge is built as library crates with a thin binary on top.
 
 | Crate | Use it to |
 |---|---|
-| [matter-controller](/matter-bridge/library/matter-controller.html) | run a Matter controller from Rust: commission, read, write, invoke, subscribe |
+| [matter-host](/matter-bridge/library/matter-host.html) | run a Matter controller from Rust: commission, read, write, invoke, subscribe |
 | [matter-model](/matter-bridge/library/matter-model.html) | name clusters, attributes, commands and events, and convert between JSON and Matter TLV |
 | [matter-bridge](/matter-bridge/library/matter-bridge.html) | run or embed the bridge itself |
 
-The [API documentation](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html) covers every public
+The [API documentation](https://oss.pulzr.net/matter-bridge/api/matter_host/index.html) covers every public
 item.
 
 ## Depending on the crates
@@ -21,7 +21,7 @@ dependency pinned to a commit. Depend on a release tag:
 
 ```toml
 [dependencies]
-matter-controller = { git = "https://github.com/pulzar-net/matter-bridge", tag = "v0.1.0" }
+matter-host = { git = "https://github.com/pulzar-net/matter-bridge", tag = "v0.1.0" }
 ```
 
 While the project is at 0.x, minor versions may break the API; the

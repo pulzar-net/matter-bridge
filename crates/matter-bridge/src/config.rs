@@ -124,7 +124,7 @@ pub struct MatterConfig {
 
 impl Default for MatterConfig {
     fn default() -> Self {
-        let c = matter_controller::Config::new("");
+        let c = matter_host::Config::new("");
         MatterConfig {
             port: c.port,
             interface: None,
@@ -160,8 +160,8 @@ impl Default for DataConfig {
 
 impl Config {
     /// The controller's configuration.
-    pub fn controller(&self) -> matter_controller::Config {
-        let mut c = matter_controller::Config::new(&self.data.dir);
+    pub fn controller(&self) -> matter_host::Config {
+        let mut c = matter_host::Config::new(&self.data.dir);
         c.port = self.matter.port;
         c.interface = self.matter.interface.clone();
         c.fabric_id = self.matter.fabric_id;

@@ -3,11 +3,11 @@
 //!
 //! Linux only (it reads `/proc/self/status`), release builds, and needs a
 //! network interface for mDNS. Run with
-//! `cargo test --release -p matter-controller --test budget -- --ignored --nocapture`.
+//! `cargo test --release -p matter-host --test budget -- --ignored --nocapture`.
 
 use std::time::Duration;
 
-use matter_controller::{BasicInfo, Config, Controller, DeviceType, Endpoint, Node, NodeStore};
+use matter_host::{BasicInfo, Config, Controller, DeviceType, Endpoint, Node, NodeStore};
 
 const NODES: u64 = 100;
 const BUDGET_KB: u64 = 16 * 1024;

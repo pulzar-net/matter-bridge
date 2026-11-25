@@ -332,12 +332,10 @@ async fn commissions_a_device_and_bridges_it() {
     let manual = window["manual_code"].as_str().unwrap().replace('-', "");
     assert_eq!(manual.len(), 11, "{window}");
     assert!(window["qr_code"].as_str().unwrap().starts_with("MT:"));
-    let parsed = matter_controller::Onboarding::parse(&manual).unwrap();
+    let parsed = matter_host::Onboarding::parse(&manual).unwrap();
     assert_eq!(
         parsed.discriminator,
-        matter_controller::Discriminator::Short(
-            (window["discriminator"].as_u64().unwrap() >> 8) as u8
-        )
+        matter_host::Discriminator::Short((window["discriminator"].as_u64().unwrap() >> 8) as u8)
     );
     if let Ok(path) = std::env::var("MATTER_E2E_WINDOW_FILE") {
         std::fs::write(path, &manual).unwrap();
@@ -346,17 +344,16 @@ async fn commissions_a_device_and_bridges_it() {
     // A second administrator, on a fabric of its own, commissions the device
     // through that window while the first keeps it.
     let second_dir = tempfile::tempdir().unwrap();
-    let mut second_config = matter_controller::Config::new(second_dir.path());
+    let mut second_config = matter_host::Config::new(second_dir.path());
     second_config.port = 5542;
     second_config.interface = std::env::var("MATTER_E2E_INTERFACE").ok();
-    let second =
-        tokio::task::spawn_blocking(move || matter_controller::Controller::start(second_config))
-            .await
-            .unwrap()
-            .unwrap();
+    let second = tokio::task::spawn_blocking(move || matter_host::Controller::start(second_config))
+        .await
+        .unwrap()
+        .unwrap();
     assert_ne!(second.info().fabric_id, 0);
     let node2 = second
-        .commission(matter_controller::CommissionRequest {
+        .commission(matter_host::CommissionRequest {
             code: manual.clone(),
             address: None,
             name: Some("dut".into()),
@@ -368,7 +365,7 @@ async fn commissions_a_device_and_bridges_it() {
     let fabrics = second
         .read(
             node2.node_id,
-            matter_controller::AttributePath {
+            matter_host::AttributePath {
                 endpoint: Some(0),
                 cluster: Some(0x003E), // Operational Credentials
                 attribute: Some(3),    // CommissionedFabrics

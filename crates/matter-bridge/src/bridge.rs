@@ -6,7 +6,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 
-use matter_controller::{AttributePath, Controller, Event, Networks, Node, WiFi};
+use matter_host::{AttributePath, Controller, Event, Networks, Node, WiFi};
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
 
@@ -420,7 +420,7 @@ impl Ctx {
     }
 }
 
-fn err(e: matter_controller::Error) -> String {
+fn err(e: matter_host::Error) -> String {
     e.to_string()
 }
 
@@ -504,7 +504,7 @@ async fn networks_of(
         },
     };
     let thread_dataset = thread_dataset
-        .map(|hex| matter_controller::network::parse_thread_dataset_hex(&hex))
+        .map(|hex| matter_host::network::parse_thread_dataset_hex(&hex))
         .transpose()
         .map_err(|e| e.to_string())?;
     let wifi = req.wifi.as_ref().map(|w| WiFi {
@@ -549,7 +549,7 @@ async fn commission(ctx: &Ctx, req: api::CommissionRequest) -> Result<api::Devic
     let networks = networks_of(&req, &ctx.matter).await?;
     let node = ctx
         .controller
-        .commission(matter_controller::CommissionRequest {
+        .commission(matter_host::CommissionRequest {
             code: req.code,
             address,
             name: req.name,

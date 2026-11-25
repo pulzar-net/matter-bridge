@@ -1,9 +1,9 @@
 ---
-title: "matter-controller"
+title: "matter-host"
 description: "A Matter controller on rs-matter."
 ---
 
-A Matter controller on rs-matter. [API docs](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html).
+A Matter controller on rs-matter. [API docs](https://oss.pulzr.net/matter-bridge/api/matter_host/index.html).
 
 ## What it does
 
@@ -30,7 +30,7 @@ in CI but not run there (the end-to-end test does the same against the
 reference device).
 
 ```rust,no_run
-use matter_controller::{CommissionRequest, Config, Controller, Event};
+use matter_host::{CommissionRequest, Config, Controller, Event};
 
 # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 let controller = Controller::start(Config::new("/var/lib/my-controller"))?;

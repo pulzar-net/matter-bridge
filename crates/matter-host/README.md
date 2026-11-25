@@ -1,4 +1,4 @@
-# matter-controller
+# matter-host
 
 A Matter controller on [rs-matter](https://github.com/project-chip/rs-matter).
 
@@ -23,6 +23,6 @@ its own; `Controller` is the `Send + Clone` handle to it.
 Part of [matter-bridge](https://github.com/pulzar-net/matter-bridge), maintained by
 [Pulzr](https://pulzr.net). See the [user guide](https://oss.pulzr.net/matter-bridge/), the
 [library guide](https://oss.pulzr.net/matter-bridge/library/index.html) and the
-[API documentation](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html).
+[API documentation](https://oss.pulzr.net/matter-bridge/api/matter_host/index.html).
 
 License: MIT.

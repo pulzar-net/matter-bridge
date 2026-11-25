@@ -64,7 +64,7 @@ jobs:
             fi
           done
       - name: Memory budget, 100 nodes
-        run: cargo test --release -p matter-controller --test budget -- --ignored --nocapture
+        run: cargo test --release -p matter-host --test budget -- --ignored --nocapture
       - name: Docs build without warnings
         env:
           RUSTDOCFLAGS: -D warnings
@@ -85,8 +85,8 @@ jobs:
       - name: Build the tests
         run: |
           cargo test -p matter-bridge --test e2e --no-run
-          cargo test -p matter-controller --test ota --no-run
-          cargo test -p matter-controller --test icd --no-run
+          cargo test -p matter-host --test ota --no-run
+          cargo test -p matter-host --test icd --no-run
       - name: Start chip-all-clusters-app
         run: |
           docker run -d --name dut --network host "${CHIP_CERT_BINS}" \
@@ -113,8 +113,8 @@ jobs:
       - name: Software update over OTA, the controller as provider
         if: always()
         env:
-          RUST_LOG: info,matter_controller=debug,rs_matter_bdx=debug
-        run: cargo test -p matter-controller --test ota -- --ignored --nocapture
+          RUST_LOG: info,matter_host=debug,rs_matter_bdx=debug
+        run: cargo test -p matter-host --test ota -- --ignored --nocapture
       - name: Requestor log
         if: always()
         run: docker logs requestor 2>&1 | tail -300
@@ -129,8 +129,8 @@ jobs:
       - name: A sleeping device checks in, and a request waits for it
         if: always()
         env:
-          RUST_LOG: info,matter_controller=debug,rs_matter_sc=debug
-        run: cargo test -p matter-controller --test icd -- --ignored --nocapture
+          RUST_LOG: info,matter_host=debug,rs_matter_sc=debug
+        run: cargo test -p matter-host --test icd -- --ignored --nocapture
       - name: ICD log
         if: always()
         run: docker logs icd 2>&1 | tail -300
@@ -147,14 +147,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Bumble
-        run: python -m pip install -r crates/matter-controller/tests/bumble/requirements.txt
+        run: python -m pip install -r crates/matter-host/tests/bumble/requirements.txt
       - uses: Swatinem/rust-cache@v2
         timeout-minutes: 10
       - name: Commission a device over Bluetooth LE (Bumble), then reach it over IP
         env:
           BUMBLE_PYTHON: python
-          RUST_LOG: info,matter_controller=debug,bluetooth_host=debug,rs_matter_transport=debug
-        run: cargo test -p matter-controller --test ble -- --ignored --nocapture
+          RUST_LOG: info,matter_host=debug,bluetooth_host=debug,rs_matter_transport=debug
+        run: cargo test -p matter-host --test ble -- --ignored --nocapture
 
   fuzz:
     runs-on: ubuntu-latest

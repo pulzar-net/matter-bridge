@@ -183,8 +183,8 @@ pub struct DeviceType {
     pub revision: u16,
 }
 
-impl From<matter_controller::Node> for Device {
-    fn from(n: matter_controller::Node) -> Self {
+impl From<matter_host::Node> for Device {
+    fn from(n: matter_host::Node) -> Self {
         let b = n.basic;
         Device {
             node_id: n.node_id,
@@ -523,9 +523,9 @@ pub enum CommissionStep {
     Interview,
 }
 
-impl From<matter_controller::CommissionStep> for CommissionStep {
-    fn from(s: matter_controller::CommissionStep) -> Self {
-        use matter_controller::CommissionStep as S;
+impl From<matter_host::CommissionStep> for CommissionStep {
+    fn from(s: matter_host::CommissionStep) -> Self {
+        use matter_host::CommissionStep as S;
         match s {
             S::Discovery => Self::Discovery,
             S::Pase => Self::Pase,
@@ -558,9 +558,9 @@ pub enum OtaStep {
     Applied,
 }
 
-impl From<matter_controller::OtaStep> for OtaStep {
-    fn from(s: matter_controller::OtaStep) -> Self {
-        use matter_controller::OtaStep as S;
+impl From<matter_host::OtaStep> for OtaStep {
+    fn from(s: matter_host::OtaStep) -> Self {
+        use matter_host::OtaStep as S;
         match s {
             S::Offered => Self::Offered,
             S::Applying => Self::Applying,
@@ -774,8 +774,8 @@ pub struct CommissioningWindow {
     pub timeout: u16,
 }
 
-impl From<matter_controller::CommissioningWindow> for CommissioningWindow {
-    fn from(w: matter_controller::CommissioningWindow) -> Self {
+impl From<matter_host::CommissioningWindow> for CommissioningWindow {
+    fn from(w: matter_host::CommissioningWindow) -> Self {
         CommissioningWindow {
             node: w.node,
             manual_code: w.manual_code,
@@ -1041,8 +1041,8 @@ pub struct Commissionable {
     pub addresses: Vec<String>,
 }
 
-impl From<matter_controller::Commissionable> for Commissionable {
-    fn from(c: matter_controller::Commissionable) -> Self {
+impl From<matter_host::Commissionable> for Commissionable {
+    fn from(c: matter_host::Commissionable) -> Self {
         Commissionable {
             instance: c.instance,
             addresses: c.addresses.iter().map(ToString::to_string).collect(),
@@ -1100,8 +1100,8 @@ pub struct OtaImage {
     pub size: u64,
 }
 
-impl From<matter_controller::OtaImage> for OtaImage {
-    fn from(i: matter_controller::OtaImage) -> Self {
+impl From<matter_host::OtaImage> for OtaImage {
+    fn from(i: matter_host::OtaImage) -> Self {
         OtaImage {
             file: i.file,
             vendor_id: i.vendor_id,

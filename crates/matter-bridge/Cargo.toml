@@ -7,13 +7,17 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/matter-bridge"
+readme = "README.md"
+include = ["src/**", "README.md", "LICENSE"]
 keywords = ["matter", "mqtt", "home-assistant", "controller"]
 categories = ["command-line-utilities", "network-programming"]
 
 [features]
 default = ["ble"]
 # Commissioning over Bluetooth LE.
-ble = ["matter-controller/ble"]
+ble = ["matter-host/ble"]
 ## Derive a JSON Schema for the configuration, from which the docs' configuration
 ## reference is generated (tests/config_reference.rs).
 schema = ["dep:schemars"]
@@ -28,7 +32,7 @@ name = "matter-bridge"
 path = "src/main.rs"
 
 [dependencies]
-matter-controller.workspace = true
+matter-host.workspace = true
 matter-model.workspace = true
 lexopt = "0.3"
 schemars = { version = "1", optional = true, features = ["preserve_order"] }
@@ -43,7 +47,7 @@ tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi", "tracing-log"] }
 
 [dev-dependencies]
-matter-controller.workspace = true
+matter-host.workspace = true
 rumqttd = { version = "0.20", default-features = false }
 tempfile = "3"
 

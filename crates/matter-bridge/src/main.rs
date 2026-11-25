@@ -71,7 +71,7 @@ async fn main() -> ExitCode {
             println!("{USAGE}");
             ExitCode::SUCCESS
         }
-        Action::Parse(code) => match matter_controller::Onboarding::parse(&code) {
+        Action::Parse(code) => match matter_host::Onboarding::parse(&code) {
             Ok(o) => {
                 println!("{}", serde_json::to_string_pretty(&o).unwrap_or_default());
                 ExitCode::SUCCESS

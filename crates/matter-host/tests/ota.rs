@@ -4,7 +4,7 @@
 //! its OTA directory and serves it over BDX.
 //!
 //! Ignored by default: it needs the device. Run with
-//! `cargo test -p matter-controller --test ota -- --ignored`, with
+//! `cargo test -p matter-host --test ota -- --ignored`, with
 //!
 //! - `MATTER_OTA_CODE`: the device's pairing code (default: the CSA test
 //!   device's, `34970112332`);
@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use matter_controller::{CommissionRequest, Config, Controller, Event, Networks, OtaStep};
+use matter_host::{CommissionRequest, Config, Controller, Event, Networks, OtaStep};
 use rs_matter::ota::{OtaImageHeader, OTA_IMAGE_DIGEST_SHA256};
 use rs_matter::tlv::OctetStr;
 
@@ -48,7 +48,7 @@ async fn update_over_ota() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,matter_controller=debug".into()),
+                .unwrap_or_else(|_| "info,matter_host=debug".into()),
         )
         .with_test_writer()
         .try_init();

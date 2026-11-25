@@ -197,34 +197,37 @@ has every request and payload with examples.
 
 | Crate | What it is |
 |---|---|
-| [`matter-controller`](crates/matter-controller) | the controller: onboarding, discovery, commissioning, the CA trait and a file CA, the controller's identity, the node store, read, write, invoke, subscriptions with renewal, events, commissioning windows |
+| [`matter-host`](crates/matter-host) | the controller: onboarding, discovery, commissioning, the CA trait and a file CA, the controller's identity, the node store, read, write, invoke, subscriptions with renewal, events, commissioning windows |
 | [`matter-model`](crates/matter-model) | the Matter data model as tables generated from the CSA's published definitions, and JSON to TLV and back, guided by them |
 | [`matter-bridge`](crates/matter-bridge) | the MQTT bridge, as a binary and a library |
 
-The crates are not on crates.io yet (rs-matter is a git dependency pinned to
-a commit); depend on them from git:
+The crates are not on crates.io yet: crates.io takes only crates whose
+dependencies are released, and the controller side of rs-matter is newer than
+its last release. A release publishes them once rs-matter's next one is out.
+Until then, depend on them from git (`matter-host` was `matter-controller` up
+to v0.1.0):
 
 ```toml
 [dependencies]
-matter-controller = { git = "https://github.com/pulzar-net/matter-bridge", tag = "v0.1.0" }
+matter-host = { git = "https://github.com/pulzar-net/matter-bridge", branch = "main" }
 ```
 
 Onboarding codes are the first thing a controller reads. This example parses
 the manual pairing code of the CSA's test device:
 
 ```rust
-use matter_controller::Onboarding;
+use matter_host::Onboarding;
 
 let code = Onboarding::parse("3497-011-2332")?;
 assert_eq!(code.passcode, 20202021);
 // A manual code does not say how to find the device, so every way is tried.
 assert!(code.capabilities.is_none());
-# Ok::<(), matter_controller::Error>(())
+# Ok::<(), matter_host::Error>(())
 ```
 
 The [library guide](https://oss.pulzr.net/matter-bridge/library/index.html)
 shows how to start a controller, commission, read and subscribe, and the
-[API docs](https://oss.pulzr.net/matter-bridge/api/matter_controller/index.html)
+[API docs](https://oss.pulzr.net/matter-bridge/api/matter_host/index.html)
 cover every item.
 
 ## Architecture
@@ -235,7 +238,7 @@ cover every item.
 ┌───────────────┴───────────────────────────────────────┐
 │ matter-bridge      topics, requests, discovery        │
 ├───────────────────────────────────────────────────────┤
-│ matter-controller  onboarding, DNS-SD discovery,      │
+│ matter-host        onboarding, DNS-SD discovery,      │
 │                    commissioning, fabric and CA,      │
 │                    node store, interaction model,     │
 │                    subscriptions                      │

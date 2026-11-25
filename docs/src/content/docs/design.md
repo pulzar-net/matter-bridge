@@ -13,7 +13,7 @@ does not have yet, and how the next pieces fit.
                           topics, requests, Home Assistant discovery
                                │  Controller handle (Send + Clone, async)
                                ▼
-                          matter-controller  ── one thread, its own runtime
+                          matter-host  ── one thread, its own runtime
                           ├ onboarding        rs-matter pairing parsers
                           ├ commissioning     rs-matter Commissioner, mDNS browse/resolve
                           ├ CA + identity     CertificateAuthority trait, FileCa
@@ -92,7 +92,7 @@ comment that links the upstream change) or depends on a branch with it.
    `NocGenerator` (a key in the process). A CA elsewhere needs the commissioner
    to hand out the CSR and await a NOC: a `NocIssuer` trait with an async
    `issue`, `NocGenerator` its local implementation. Until then
-   matter-controller commissions only with a CA that exposes `signing_key`.
+   matter-host commissions only with a CA that exposes `signing_key`.
 3. **Controller scale.** Sessions are sized at compile time and stop at 64
    (`max-sessions-64`); a controller with 100+ live subscriptions needs a CASE
    session per node. Options: larger features (128, 256), or an
@@ -103,7 +103,7 @@ comment that links the upstream change) or depends on a branch with it.
 5. **Network commissioning helpers.** After PASE, before AddNOC completes,
    a Wi-Fi or Thread device needs `AddOrUpdateWiFiNetwork` /
    `AddOrUpdateThreadNetwork` and `ConnectNetwork`. `Commissioner` leaves the
-   PASE session open for this; matter-controller can drive it with its
+   PASE session open for this; matter-host can drive it with its
    generic invoke, but the ordering inside the fail-safe belongs in the
    commissioner.
 
@@ -118,7 +118,7 @@ Anything else found while building on rs-matter joins this list.
   `0xFFF6` service, `write` to C1 (completes on the Write Response), subscribe
   to C2 and take its indications from the connection's events (listening
   before subscribing, so the BTP handshake response is not missed), `read` C3.
-  matter-controller feeds those indications to `Btp::process_incoming` and
+  matter-host feeds those indications to `Btp::process_incoming` and
   writes what `Btp::process_outgoing` yields; commissioning then runs PASE
   over BTP, network commissioning, and CASE over IP.
 - **Thread.** A Thread device is commissioned over BLE and given the Thread

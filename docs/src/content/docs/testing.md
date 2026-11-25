@@ -46,7 +46,7 @@ commissioning with the README's own commands.
 
 ## Bluetooth commissioning
 
-`crates/matter-controller/tests/ble.rs` commissions a Wi-Fi device over
+`crates/matter-host/tests/ble.rs` commissions a Wi-Fi device over
 Bluetooth LE between two virtual controllers from Bumble on every commit:
 found by its advertisement, PASE over BLE, Wi-Fi credentials given, CASE
 over IP. Thread commissioning is tested up to the request that hands the
@@ -69,7 +69,7 @@ cargo +nightly fuzz run json_to_tlv -- -max_total_time=600
 ## Budgets
 
 - **Memory:** under 16 MB resident with 100 nodes in the store
-  (`cargo test --release -p matter-controller --test budget -- --ignored`).
+  (`cargo test --release -p matter-host --test budget -- --ignored`).
 - **Binary size:** static `aarch64` and `mipsel` builds in CI.
 
 ## Documentation

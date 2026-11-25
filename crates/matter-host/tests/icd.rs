@@ -5,7 +5,7 @@
 //! read made meanwhile is queued until then.
 //!
 //! Ignored by default: it needs the device. Run with
-//! `cargo test -p matter-controller --test icd -- --ignored`, with
+//! `cargo test -p matter-host --test icd -- --ignored`, with
 //!
 //! - `MATTER_ICD_CODE`: the device's pairing code (default: the CSA test
 //!   device's, `34970112332`);
@@ -13,7 +13,7 @@
 
 use std::time::Duration;
 
-use matter_controller::{AttributePath, CommissionRequest, Config, Controller, Event, Networks};
+use matter_host::{AttributePath, CommissionRequest, Config, Controller, Event, Networks};
 
 fn config(dir: &std::path::Path) -> Config {
     let mut config = Config::new(dir);
@@ -27,7 +27,7 @@ async fn sleeping_device_checks_in() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,matter_controller=debug".into()),
+                .unwrap_or_else(|_| "info,matter_host=debug".into()),
         )
         .with_test_writer()
         .try_init();

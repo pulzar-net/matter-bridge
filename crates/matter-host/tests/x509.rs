@@ -1,7 +1,7 @@
 //! Certificates from a CA built on common PKI tooling (Python's
 //! `cryptography`), in the Matter profile, converted to Matter TLV.
 
-use matter_controller::x509::to_matter_tlv;
+use matter_host::x509::to_matter_tlv;
 use rs_matter::cert::CertRef;
 use rs_matter::tlv::TLVElement;
 

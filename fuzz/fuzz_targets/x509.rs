@@ -4,5 +4,5 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = matter_controller::x509::to_matter_tlv(data);
+    let _ = matter_host::x509::to_matter_tlv(data);
 });

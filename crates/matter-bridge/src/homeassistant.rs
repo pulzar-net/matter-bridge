@@ -2,7 +2,7 @@
 //! chosen by the clusters an endpoint serves (and its device type, where the
 //! cluster alone is ambiguous), so no per-device table is needed.
 
-use matter_controller::Node;
+use matter_host::Node;
 
 use crate::api::{DiscoveryAvailability, DiscoveryConfig, DiscoveryDevice};
 use crate::topics;
@@ -253,7 +253,7 @@ impl Discovery<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use matter_controller::{BasicInfo, DeviceType, Endpoint};
+    use matter_host::{BasicInfo, DeviceType, Endpoint};
 
     fn node(device_type: u32, clusters: &[u32]) -> Node {
         let mut endpoints = std::collections::BTreeMap::new();

@@ -57,8 +57,8 @@ export default [
 				"slug": "library"
 			},
 			{
-				"label": "matter-controller",
-				"slug": "library/matter-controller"
+				"label": "matter-host",
+				"slug": "library/matter-host"
 			},
 			{
 				"label": "matter-model",

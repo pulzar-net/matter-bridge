@@ -11,7 +11,7 @@
 //! Ignored by default; needs `BUMBLE_PYTHON`, a Python with `bumble`
 //! (`pip install -r tests/bumble/requirements.txt`), and a network interface
 //! for mDNS:
-//! `BUMBLE_PYTHON=python cargo test -p matter-controller --test ble -- --ignored`.
+//! `BUMBLE_PYTHON=python cargo test -p matter-host --test ble -- --ignored`.
 
 #![cfg(feature = "ble")]
 
@@ -21,7 +21,7 @@ use std::time::Duration;
 use bluetooth_host::adv::Uuid;
 use bluetooth_host::gatt::server::{Access, CharacteristicDef, ServiceDef};
 use bluetooth_host::{AdvertisingParams, Host, HostConfig, HostEvent, TransportSpec};
-use matter_controller::{AttributePath, CommissionRequest, Config, Controller, Networks, WiFi};
+use matter_host::{AttributePath, CommissionRequest, Config, Controller, Networks, WiFi};
 use rs_matter::crypto::{default_crypto, Crypto as _};
 use rs_matter::dm::clusters::app::on_off::{self, test::TestOnOffDeviceLogic, OnOffHooks as _};
 use rs_matter::dm::clusters::desc::{self, ClusterHandler as _};
@@ -344,7 +344,7 @@ async fn commissions_a_device_over_bluetooth() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info,matter_controller=debug,bluetooth_host=debug".into()),
+                .unwrap_or_else(|_| "info,matter_host=debug,bluetooth_host=debug".into()),
         )
         .with_test_writer()
         .try_init();
@@ -420,11 +420,11 @@ async fn commissions_a_device_over_bluetooth() {
     // It went through Bluetooth and network setup.
     let mut steps = Vec::new();
     while let Ok(e) = events.try_recv() {
-        if let matter_controller::Event::Commissioning { step, .. } = e {
+        if let matter_host::Event::Commissioning { step, .. } = e {
             steps.push(step);
         }
     }
-    use matter_controller::CommissionStep as S;
+    use matter_host::CommissionStep as S;
     for want in [
         S::Pase,
         S::NetworkSetup,

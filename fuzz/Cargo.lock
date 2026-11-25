@@ -1000,23 +1000,25 @@ name = "matter-bridge-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
- "matter-controller",
+ "matter-host",
  "matter-model",
  "rs-matter-tlv",
  "serde_json",
 ]
 
 [[package]]
-name = "matter-controller"
+name = "matter-host"
 version = "0.1.0"
 dependencies = [
  "async-io",
+ "der",
  "embassy-time",
  "embassy-time-queue-utils",
  "hex",
  "if-addrs",
  "log",
  "matter-model",
+ "p256",
  "rand",
  "rs-matter",
  "serde",
@@ -1024,6 +1026,7 @@ dependencies = [
  "socket2",
  "thiserror",
  "tokio",
+ "x509-cert",
 ]
 
 [[package]]

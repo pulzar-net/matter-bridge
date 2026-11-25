@@ -17,5 +17,5 @@ struct ReadmeDoctests;
 
 // The library guide's examples are compiled too.
 #[cfg(doctest)]
-#[doc = include_str!("../../../docs/src/content/docs/library/matter-controller.md")]
+#[doc = include_str!("../../../docs/src/content/docs/library/matter-host.md")]
 struct LibraryGuideDoctests;

@@ -14,7 +14,7 @@ devices. matter-bridge is a controller, built on
 - **rs-matter** provides the protocol: the transport with its reliability
   layer, PASE and CASE sessions, the interaction model client and server,
   mDNS, the commissioner, and BTP for Bluetooth.
-- **matter-controller** is the controller on top: onboarding, discovery,
+- **matter-host** is the controller on top: onboarding, discovery,
   the fabric and its CA, commissioning flows, the node store,
   subscriptions, and JSON in and out.
 - **matter-bridge** maps it to MQTT and Home Assistant.
@@ -27,7 +27,7 @@ devices. matter-bridge is a controller, built on
  matter-bridge ───── topics, requests, Home Assistant discovery
         │  Controller handle (Send + Clone, async)   ▲ Event (channel)
         ▼                                            │
- matter-controller ─ a thread of its own, running rs-matter:
+ matter-host ─ a thread of its own, running rs-matter:
         │            onboarding, discovery, commissioning, CA and identity,
         │            node store, read/write/invoke, subscriptions
         ├── matter-model   data model tables, JSON ⇄ TLV
